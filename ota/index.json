@@ -25,5 +25,14 @@
     "sha512": "824488b72f0a1fd2de28d775a20e6b6275e6fda77bcbc8ef34e7f6735cc29358281e2977bf1b09f4cd5a198d6c38023958f722b78ff7d4ad6f3de6a100e47859",
     "url": "https://raw.githubusercontent.com/semicolonmystery/07087-2-Enhanced/main/ota/TS1001-Enhanced-v1.0.4.ota",
     "modelId": "TS1001_TYZB01_7qf81wty_Enhanced"
+  },
+  {
+    "fileVersion": 16778240,
+    "fileSize": 165586,
+    "manufacturerCode": 4098,
+    "imageType": 0,
+    "sha512": "871e49fab307f05bedc58f4e791985def05bc64c432f653c99f6111695df63d214765a99ad4398dbf9c007ecf40fc6e1bf071b3c1babaf0da0d70257187d55ef",
+    "url": "https://raw.githubusercontent.com/semicolonmystery/07087-2-Enhanced/main/ota/TS1001_TYZB01_7qf81wty_Enhanced-v1.0.4.ota",
+    "modelId": "TS1001_TYZB01_7qf81wty_Enhanced"
   }
 ]
