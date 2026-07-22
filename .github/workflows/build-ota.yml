@@ -1,0 +1,60 @@
+name: Build OTA and Rebuild Index
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ota/*.s37'
+      - 'ota/*.hex'
+      - 'ota/*.bin'
+      - 'ota/*.ota'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-index:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Cache Simplicity Commander
+        id: cache-commander
+        uses: actions/cache@v4
+        with:
+          path: commander
+          key: simplicity-commander-linux-2024
+
+      - name: Download Simplicity Commander
+        if: steps.cache-commander.outputs.cache-hit != 'true'
+        run: |
+          wget -q -O commander.zip https://www.silabs.com/documents/login/software/SimplicityCommander-Linux.zip
+          unzip -q commander.zip -d commander
+          chmod +x commander/Commander_linux_x86_64/commander
+
+      - name: Add Commander to PATH
+        run: echo "${GITHUB_WORKSPACE}/commander/Commander_linux_x86_64" >> $GITHUB_PATH
+
+      - name: Process any new firmware builds into .ota
+        run: python .github/scripts/create_ota.py
+
+      - name: Rebuild ota/index.json
+        run: python .github/scripts/build_ota_index.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ota/
+          if git diff --cached --quiet; then
+            echo "No changes to ota/ folder"
+          else
+            git commit -m "ota: process firmware build and update index [skip ci]"
+            git push
+          fi

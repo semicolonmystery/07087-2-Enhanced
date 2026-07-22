@@ -43,55 +43,38 @@ In `config/ota-client-policy-config.h` (Studio owns this file; edit the value):
 ```
 Rebuild in Studio → produces the new `.../GNU ARM v12.2.1 - Default/Zigbee-Remote-_TYZB01_7qf81wty.s37`.
 
-## 2. `.s37` → `.gbl` (Simplicity Commander, LZMA-compressed to fit the 192 KB slot)
+## 2. Publish to Z2M (Automated OTA build)
 
-Commander ships inside the Studio install, typically at:
-`<SimplicityStudio>/developer/adapter_packs/commander/commander.exe`
-(find yours; it is NOT on PATH). Then:
-```
-commander gbl create TS1001-CUS-v1.0.2.gbl \
-    --app "Zigbee-Remote-_TYZB01_7qf81wty/GNU ARM v12.2.1 - Default/Zigbee-Remote-_TYZB01_7qf81wty.s37" \
-    --compress lzma
-```
-The internal-storage bootloader on the device understands LZMA GBLs; compression
-keeps the image well under the 192 KB storage slot (`0x44000..0x74000`).
+Instead of manually building the `.gbl` and `.ota` files using Silicon Labs tools, this repository uses a GitHub Action to automate it.
 
-## 3. `.gbl` → Zigbee `.ota` (image-builder, bundled in the SDK)
-
-Tool: `SDKs/gecko_sdk/protocol/zigbee/tool/image-builder/image-builder-windows.exe`
-(or `image-builder-linux` on the Pi). Verified flags:
-```
-image-builder-windows.exe --create TS1001-CUS-v1.0.2.ota \
-    --manuf-id 0x1002 \
-    --image-type 0x0000 \
-    --version 0x01000200 \
-    --string "TS1001-CUS" \
-    --tag-id 0x0000 --tag-file TS1001-CUS-v1.0.2.gbl
-```
-`--tag-id 0x0000` is the "Upgrade Image" tag that wraps the GBL. `--version` is the
-OTA header file version and MUST equal `FW_OTA_FILE_VERSION`.
-
-Sanity-check the header:
-```
-image-builder-windows.exe --print TS1001-CUS-v1.0.2.ota
-# expect: Manufacturer ID 0x1002, Firmware Version 0x01000200, Image Type 0x0000
-```
-
-## 4. Publish to Z2M (hosted OTA index)
-
-Commit the `.ota` file into this folder and push to `main`:
+1. Locate the built `.s37` (or `.hex`/`.bin`) application image from Simplicity Studio:
+   `Zigbee-Remote-_TYZB01_7qf81wty/GNU ARM v12.2.1 - Default/Zigbee-Remote-_TYZB01_7qf81wty.s37`
+2. Copy it into this `ota/` folder and name it anything (e.g., `ota/update.s37`).
+3. Commit and push it to `main`:
 
 ```sh
-git add ota/TS1001-CUS-v1.0.2.ota
+git add ota/update.s37
 git commit -m "ota: release v1.0.2"
 git push
 ```
 
-A GitHub Action ([`.github/workflows/ota-index.yml`](../.github/workflows/ota-index.yml))
-scans every `.ota` file in this folder, reads each Zigbee OTA header, and
-regenerates `ota/index.json` with the correct `fileSize`, `sha512`, and a raw
-GitHub URL for each release — you don't need to compute or edit any of that
-by hand.
+A GitHub Action ([`.github/workflows/build-ota.yml`](../.github/workflows/build-ota.yml)) will automatically:
+- Read `app_config.h` to determine the exact version number you set.
+- Compress the binary into an LZMA `.gbl` using Simplicity Commander.
+- Wrap it in a proper `.ota` file with the correct Zigbee OTA headers (`TS1001-CUS-v<MAJOR>.<MINOR>.<PATCH>.ota`).
+- Regenerate `ota/index.json` with the new file size and SHA512.
+- Remove your `.s37` file from the folder, commit the `.ota` and `index.json`, and push the result back to `main`.
+
+You don't need to compute, wrap, or edit anything by hand.
+
+### Local Docker Build
+
+If you want to build the `.ota` file locally without installing Simplicity Commander on your machine, a Dockerfile is provided:
+1. Build the image once: `docker build -t ota-builder tools/ota-builder`
+2. Drop your `.s37` into the `ota/` folder.
+3. Run the image from the repository root: `docker run --rm -v ${PWD}:/repo ota-builder`
+
+This will generate the `.ota` file and clean up the `.s37` locally, exactly as the GitHub Action does.
 
 Point Zigbee2MQTT at the hosted index in `configuration.yaml`:
 
