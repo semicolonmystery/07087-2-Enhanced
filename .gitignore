@@ -1,0 +1,21 @@
+# Simplicity Studio build output & generated
+**/GNU ARM*/
+**/autogen/
+**/gecko_sdk*/
+**/.pdm/
+**/.settings/
+**/*.cproject
+**/*.project
+**/.projectlinkstore
+# Studio workspace metadata / scratch
+.metadata/
+.browser/
+outgoing/
+# Internal planning doc (not published)
+PLAN.md
+# misc
+*.o
+*.d
+*~
+.DS_Store
+**/config/zcl/*.zap~
