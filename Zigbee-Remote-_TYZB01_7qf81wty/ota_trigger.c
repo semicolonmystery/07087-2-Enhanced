@@ -55,6 +55,7 @@ static sl_zigbee_event_t s_check_event;   // OTA_QUERY_GRACE_S idle detector
 static uint64_t s_last_query_ms;          // throttle timestamp (monotonic ms)
 static bool     s_queried_once;           // first wake after boot queries now
 static bool     s_session_active;         // between start and the end funnel
+static sl_zigbee_event_t s_fast_poll_event; // fast poll to accelerate OTA
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -88,6 +89,7 @@ static void ota_session_end(const char *why, bool stop_client)
   s_session_active = false;
   sl_zigbee_event_set_inactive(&s_cap_event);
   sl_zigbee_event_set_inactive(&s_check_event);
+  sl_zigbee_event_set_inactive(&s_fast_poll_event);
   led_effect_stop();                       // OTA breathing off (F8)
   if (stop_client) {
     sli_zigbee_af_ota_client_stop();       // resets state + kills plugin timers
@@ -127,6 +129,20 @@ static void ota_check_handler(sl_zigbee_event_t *event)
   }
 }
 
+/** @brief Force MAC data polling every 100ms during an active OTA session.
+ *         The sleepy end-device support plugin defaults to a 1-second short
+ *         poll interval which artificially throttles the OTA speed. This
+ *         bypasses it safely. */
+static void ota_fast_poll_handler(sl_zigbee_event_t *event)
+{
+  (void)event;
+  if (!s_session_active) {
+    return;
+  }
+  (void)emberPollForData();
+  sl_zigbee_event_set_delay_ms(&s_fast_poll_event, 100);
+}
+
 // ---------------------------------------------------------------------------
 // Plugin callback override (weak default in ota-client-cb.c:28)
 // ---------------------------------------------------------------------------
@@ -153,6 +169,7 @@ void ota_trigger_init(void)
 {
   sl_zigbee_event_init(&s_cap_event, ota_cap_handler);
   sl_zigbee_event_init(&s_check_event, ota_check_handler);
+  sl_zigbee_event_init(&s_fast_poll_event, ota_fast_poll_handler);
   s_last_query_ms  = 0;
   s_queried_once   = false;
   s_session_active = false;
@@ -180,6 +197,7 @@ void ota_trigger_start(bool manual)
   led_effect_start(LED_EFFECT_OTA, true, 0);   // breathing until session end
   sl_zigbee_event_set_delay_ms(&s_cap_event, OTA_SESSION_MAX_S * 1000UL);
   sl_zigbee_event_set_delay_ms(&s_check_event, OTA_QUERY_GRACE_S * 1000UL);
+  sl_zigbee_event_set_delay_ms(&s_fast_poll_event, 100);
 }
 
 void ota_trigger_on_wake(void)

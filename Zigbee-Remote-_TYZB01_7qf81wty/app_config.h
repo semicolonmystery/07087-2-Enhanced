@@ -115,11 +115,11 @@
 // ---------------------------------------------------------------------------
 #define FW_VERSION_MAJOR            1
 #define FW_VERSION_MINOR            0
-#define FW_VERSION_PATCH            7
+#define FW_VERSION_PATCH            8
 #define FW_APP_VERSION_ATTR         0x01    // Basic ApplicationVersion (0x0001)
-#define FW_VERSION_STRING           "1.0.7" // Basic SW Build ID (0x4000)
+#define FW_VERSION_STRING           "1.0.8" // Basic SW Build ID (0x4000)
 // OTA image file version: monotonic; 0xMMmmppbb (major.minor.patch.build).
-#define FW_OTA_FILE_VERSION         0x01000700UL
+#define FW_OTA_FILE_VERSION         0x01000800UL
 
 // ---------------------------------------------------------------------------
 // Debug

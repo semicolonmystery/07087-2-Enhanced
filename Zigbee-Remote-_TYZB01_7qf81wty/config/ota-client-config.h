@@ -75,7 +75,7 @@
 // <q EMBER_AF_PLUGIN_OTA_CLIENT_USE_PAGE_REQUEST> Use Page Request
 // <i> Default: FALSE
 // <i> This causes the device to use an OTA Page Request command to ask for a large block of data all at once, rather than use individual image block requests for each block.
-#define EMBER_AF_PLUGIN_OTA_CLIENT_USE_PAGE_REQUEST   1
+#define EMBER_AF_PLUGIN_OTA_CLIENT_USE_PAGE_REQUEST   0
 
 // <o EMBER_AF_PLUGIN_OTA_CLIENT_PAGE_REQUEST_SIZE> Page Request Size
 // <i> Page Request Size
