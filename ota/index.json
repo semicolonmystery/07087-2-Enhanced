@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "fileVersion": 16777728,
+    "fileSize": 164858,
+    "manufacturerCode": 4098,
+    "imageType": 0,
+    "sha512": "c4e8c9bccf73b2207c7ece7e47c0e16f0ea64a6e679820a658ca9d32a74c30a379877bd14f4c106e4f3a5604a2d7acd00541751a823718831698c2152af4b9c2",
+    "url": "https://raw.githubusercontent.com/semicolonmystery/07087-2-Enhanced/main/ota/TS1001-CUS-v1.0.2.ota",
+    "modelId": "TS1001-CUS"
+  }
+]
