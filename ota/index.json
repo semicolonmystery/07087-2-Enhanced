@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "fileVersion": 16778496,
+    "fileSize": 165586,
+    "manufacturerCode": 4098,
+    "imageType": 0,
+    "sha512": "a503986e08176acf6f4f69b513dbb3532cbef837de3b4f1707db167a42b1da81098ba674cd401e02b80f2f32efe7f699b87894ebbe1a3fb16de26d255885b7b0",
+    "url": "https://raw.githubusercontent.com/semicolonmystery/07087-2-Enhanced/main/ota/TS1001_TYZB01_7qf81wty_Enhanced-v1.0.5.ota",
+    "modelId": "TS1001_TYZB01_7qf81wty_Enhanced"
+  }
+]
