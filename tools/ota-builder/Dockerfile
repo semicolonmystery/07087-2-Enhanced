@@ -9,11 +9,12 @@ RUN apt-get update && \
 
 # Download and extract Simplicity Commander for Linux
 RUN wget -q -O commander.zip https://www.silabs.com/documents/login/software/SimplicityCommander-Linux.zip && \
-    unzip -q commander.zip -d /opt/commander && \
-    rm commander.zip
+    unzip -q commander.zip -d /tmp/commander_zip && \
+    tar -xf /tmp/commander_zip/SimplicityCommander-Linux/Commander_linux_x86_64_*.tar.bz* -C /opt && \
+    rm -rf commander.zip /tmp/commander_zip
 
 # Add Commander to PATH
-ENV PATH="/opt/commander/Commander_linux_x86_64:${PATH}"
+ENV PATH="/opt/commander:${PATH}"
 
 # Create working directory for the repository mount
 WORKDIR /repo
