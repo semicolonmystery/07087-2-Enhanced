@@ -64,7 +64,7 @@ def main():
     ver_info = parse_app_config()
     print(f"Parsed version: v{ver_info['major']}.{ver_info['minor']}.{ver_info['patch']} (0x{ver_info['file_version']:08X})")
     
-    out_name = f"TS1001-Enhanced-v{ver_info['major']}.{ver_info['minor']}.{ver_info['patch']}.ota"
+    out_name = f"TS1001_TYZB01_7qf81wty_Enhanced-v{ver_info['major']}.{ver_info['minor']}.{ver_info['patch']}.ota"
     out_path = OTA_DIR / out_name
 
     for build_file in s37_files:
@@ -89,7 +89,7 @@ def main():
             manufacturer_code=0x1002,
             image_type=0x0000,
             file_version=ver_info["file_version"],
-            string_id="TS1001-Enhanced"
+            string_id="TS1001_TYZB01_7qf81wty_Enhanced"
         )
         
         out_path.write_bytes(ota_data)
