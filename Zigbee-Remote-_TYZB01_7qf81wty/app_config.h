@@ -115,11 +115,11 @@
 // ---------------------------------------------------------------------------
 #define FW_VERSION_MAJOR            1
 #define FW_VERSION_MINOR            0
-#define FW_VERSION_PATCH            4
+#define FW_VERSION_PATCH            5
 #define FW_APP_VERSION_ATTR         0x01    // Basic ApplicationVersion (0x0001)
-#define FW_VERSION_STRING           "1.0.4" // Basic SW Build ID (0x4000)
+#define FW_VERSION_STRING           "1.0.5" // Basic SW Build ID (0x4000)
 // OTA image file version: monotonic; 0xMMmmppbb (major.minor.patch.build).
-#define FW_OTA_FILE_VERSION         0x01000400UL
+#define FW_OTA_FILE_VERSION         0x01000500UL
 
 // ---------------------------------------------------------------------------
 // Debug
@@ -130,7 +130,7 @@
 // every TS_LOG(...) below compiles to nothing (no flash, no cycles, no wakeups),
 // so the app is silent even with the RTT/CLI components still installed. Set to 1
 // AND keep the iostream_rtt + zigbee_debug_print components to get the logs back.
-//#define DEBUG_LOGGING               0
+#define DEBUG_LOGGING               1
 #if DEBUG_LOGGING
   #define TS_LOG(...)  sl_zigbee_app_debug_println(__VA_ARGS__)
 #else
