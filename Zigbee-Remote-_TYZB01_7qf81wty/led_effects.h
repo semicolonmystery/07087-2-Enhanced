@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file led_effects.h
- * @brief TS1001-CUS non-blocking LED effect engine (F8) — PWM on PA5.
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced non-blocking LED effect engine (F8) — PWM on PA5.
  *
  * Milestone 2. Replaces the stock `simple_led` component (wrong pin, no PWM).
  * The single feedback LED sits on PA5 and is ACTIVE-LOW (pin low = LED on).

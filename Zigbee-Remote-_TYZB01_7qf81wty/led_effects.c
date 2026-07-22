@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file led_effects.c
- * @brief TS1001-CUS non-blocking LED effect engine (F8) — PWM on PA5.
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced non-blocking LED effect engine (F8) — PWM on PA5.
  *
  * See led_effects.h for the public contract and PLAN.md (M2, F8) for the spec.
  * Every timing constant comes from app_config.h.

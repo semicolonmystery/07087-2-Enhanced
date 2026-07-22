@@ -4,7 +4,7 @@ Guidance for Claude Code (and other agents) working in this repository.
 
 ## What this is
 
-TS1001-CUS is open-source EmberZNet (Zigbee 3.0) firmware for the Immax NEO
+TS1001_TYZB01_7qf81wty_Enhanced is open-source EmberZNet (Zigbee 3.0) firmware for the Immax NEO
 Smart Remote v2, a four-button handheld remote built on a Tuya TYZS3 module
 (Silicon Labs EFR32MG13). It replaces the stock Tuya firmware with a fully
 local implementation that drives lights and groups through the Zigbee
@@ -20,7 +20,7 @@ bootloader-storage-internal-single-512k/ Simplicity Studio bootloader project
 tools/                                   flash.sh, debug.sh, efr32.cfg — Pi CM4 + OpenOCD workflow
 docs/                                    BUILD.md, api-reference.md, images/
 ota/                                     OTA image build guide + hosted index.json
-z2m/                                     Zigbee2MQTT external converter (ts1001-cus.js)
+z2m/                                     Zigbee2MQTT external converter (ts1001-tyzb01-enhanced.js)
 .github/                                 CI: rebuilds ota/index.json when a .ota is pushed
 ```
 

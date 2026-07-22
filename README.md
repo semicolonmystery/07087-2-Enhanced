@@ -1,8 +1,8 @@
-# TS1001-CUS — Open Firmware for the Immax NEO Smart Remote v2
+# TS1001_TYZB01_7qf81wty_Enhanced — Open Firmware for the Immax NEO Smart Remote v2
 
 <img src="docs/images/immax-neo-remote-v2.png" alt="Immax NEO Smart Remote v2" width="240" align="right">
 
-TS1001-CUS is a from-scratch, open-source replacement firmware for the
+TS1001_TYZB01_7qf81wty_Enhanced is a from-scratch, open-source replacement firmware for the
 **Immax NEO Smart Remote v2**, a four-button Zigbee 3.0 handheld remote built
 around a Tuya **TYZS3** module (Silicon Labs **EFR32MG13**). The stock
 firmware is locked to Tuya's cloud-oriented data model; this firmware
@@ -63,9 +63,9 @@ ON and OFF are single-function buttons — click is their only gesture.
    this resets the device and opens a 30-second join window. Put your
    coordinator into pairing mode first.
 3. **Install the Zigbee2MQTT converter.** Copy
-   [`z2m/ts1001-cus.js`](z2m/ts1001-cus.js) into Z2M's
+   [`z2m/ts1001-tyzb01-enhanced.js`](z2m/ts1001-tyzb01-enhanced.js) into Z2M's
    `external_converters` folder (or reference it in `configuration.yaml`)
-   and restart Z2M. The device will show up as **TS1001-CUS**.
+   and restart Z2M. The device will show up as **TS1001_TYZB01_7qf81wty_Enhanced**.
 4. **Bind it.** In Z2M, bind the remote to a light and/or a group using the
    device's Bind tab. Because this is a sleepy end device, it only receives
    Zigbee requests for a couple of seconds after a button press — **press

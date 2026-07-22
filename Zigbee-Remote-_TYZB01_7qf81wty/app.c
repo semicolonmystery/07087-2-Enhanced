@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file app.c
- * @brief TS1001-CUS custom remote — application entry & Zigbee stack callbacks.
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced custom remote — application entry & Zigbee stack callbacks.
  *
  * M0 baseline: the example's ZLL / touch-link / find-and-bind / simple-button /
  * simple-led code has been removed (those components are gone from the .slcp).

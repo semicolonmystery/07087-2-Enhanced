@@ -130,7 +130,7 @@ Zigbee-Remote-_TYZB01_7qf81wty/   application project (app.c, buttons.c,
                                   action_cache.c, ota_trigger.c, app_config.h)
 bootloader-storage-internal-single-512k/   Gecko bootloader project
 tools/                             flash.sh / debug.sh / efr32.cfg (Pi CM4 + OpenOCD)
-z2m/ts1001-cus.js                  Zigbee2MQTT external converter
+z2m/ts1001-tyzb01-enhanced.js                  Zigbee2MQTT external converter
 ota/                                OTA image build guide + hosted index
 docs/api-reference.md              verified SDK API signatures
 docs/BUILD.md                      this file

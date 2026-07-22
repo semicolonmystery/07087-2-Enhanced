@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file buttons.c
- * @brief TS1001-CUS custom GPIO button driver + debounced gesture state machine.
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced custom GPIO button driver + debounced gesture state machine.
  *
  * See buttons.h for the public contract and PLAN.md (M1, F1/F2/F4/F5/F6) for the
  * behavioural spec. Every timing constant comes from app_config.h.

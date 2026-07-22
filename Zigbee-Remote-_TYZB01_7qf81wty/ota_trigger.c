@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file ota_trigger.c
- * @brief TS1001-CUS OTA session control (F10, M9). Contract in ota_trigger.h.
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced OTA session control (F10, M9). Contract in ota_trigger.h.
  *
  * Verified SDK APIs (headers cited):
  *   emberAfOtaClientStartCallback() — kick off server discovery + query-next-

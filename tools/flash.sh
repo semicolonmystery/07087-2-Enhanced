@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# flash.sh — TS1001-CUS remote flasher (EFR32MG13 / TYZS3 via OpenOCD, Pi CM4)
+# flash.sh — TS1001_TYZB01_7qf81wty_Enhanced remote flasher (EFR32MG13 / TYZS3 via OpenOCD, Pi CM4)
 #
 # Commands:
 #   ./flash.sh check             Test the SWD link (halt, peek memory, resume)

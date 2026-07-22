@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file action_cache.h
- * @brief TS1001-CUS offline action cache with semantic coalescing (F7).
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced offline action cache with semantic coalescing (F7).
  *
  * Milestone 7. When a control command cannot be delivered (not joined, or both
  * binding send paths failed), the USER INTENT — not the raw command — is

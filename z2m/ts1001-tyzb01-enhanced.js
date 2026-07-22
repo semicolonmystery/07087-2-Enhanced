@@ -1,5 +1,5 @@
 /**
- * ts1001-cus.js — Zigbee2MQTT external converter for the DIY TS1001 remote
+ * ts1001-tyzb01-enhanced.js — Zigbee2MQTT external converter for the DIY TS1001 remote
  * (custom firmware; stock device identified as TS1001 / _TYZB01_7qf81wty,
  *  sold as Immax NEO Smart Remote v2 / Müller Licht tint remote).
  *
@@ -7,7 +7,7 @@
  * or configure `external_converters:` in configuration.yaml), restart Z2M.
  *
  * The custom firmware fingerprints as manufacturerName "DIY-Immax",
- * modelID "TS1001-CUS" — deliberately NOT the stock strings, so Z2M never
+ * modelID "TS1001_TYZB01_7qf81wty_Enhanced" — deliberately NOT the stock strings, so Z2M never
  * loads the stock Tuya/Müller-Licht definition for it.
  */
 const fz = require('zigbee-herdsman-converters/converters/fromZigbee');
@@ -16,8 +16,8 @@ const reporting = require('zigbee-herdsman-converters/lib/reporting');
 const e = exposes.presets;
 
 const definition = {
-    fingerprint: [{modelID: 'TS1001-CUS', manufacturerName: 'DIY-Immax'}],
-    model: 'TS1001-CUS',
+    fingerprint: [{modelID: 'TS1001_TYZB01_7qf81wty_Enhanced', manufacturerName: 'DIY-Immax'}],
+    model: 'TS1001_TYZB01_7qf81wty_Enhanced',
     vendor: 'Immax NEO (DIY firmware)',
     description: 'Immax NEO Smart Remote v2 with custom open firmware ' +
                  '(hardware: Tuya TS1001 / _TYZB01_7qf81wty, TYZS3 module)',

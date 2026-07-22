@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file ota_trigger.h
- * @brief TS1001-CUS OTA session control (F10, M9).
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced OTA session control (F10, M9).
  *
  * The stock OTA client plugin is configured to never start or poll on its own
  * (AUTO_START off, periodic timers backstopped to 1/day — see

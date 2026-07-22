@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file battery.h
- * @brief TS1001-CUS battery measurement + Power Configuration reporting (F3).
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced battery measurement + Power Configuration reporting (F3).
  *
  * Milestone 6. Measures the 2xAAA alkaline pack through a P-MOSFET-switched
  * 200k/100k divider and publishes the result as the endpoint-1 Power

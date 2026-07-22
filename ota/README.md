@@ -1,4 +1,4 @@
-# TS1001-CUS OTA image build & Zigbee2MQTT publishing
+# TS1001_TYZB01_7qf81wty_Enhanced OTA image build & Zigbee2MQTT publishing
 
 How to build a new firmware image and hand it to Z2M so the remote can update
 over the air. The device checks for updates at most once a day on wake, or
@@ -22,10 +22,10 @@ So every release must bump the version.
 Built images are committed to this folder as:
 
 ```
-TS1001-CUS-v<MAJOR>.<MINOR>.<PATCH>.ota
+TS1001_TYZB01_7qf81wty_Enhanced-v<MAJOR>.<MINOR>.<PATCH>.ota
 ```
 
-for example `TS1001-CUS-v1.0.2.ota`. Pushing a `.ota` file here to `main`
+for example `TS1001_TYZB01_7qf81wty_Enhanced-v1.0.2.ota`. Pushing a `.ota` file here to `main`
 triggers a GitHub Action that regenerates `ota/index.json` automatically —
 see [Publish to Z2M](#4-publish-to-z2m-hosted-ota-index) below.
 
@@ -61,7 +61,7 @@ git push
 A GitHub Action ([`.github/workflows/build-ota.yml`](../.github/workflows/build-ota.yml)) will automatically:
 - Read `app_config.h` to determine the exact version number you set.
 - Compress the binary into an LZMA `.gbl` using Simplicity Commander.
-- Wrap it in a proper `.ota` file with the correct Zigbee OTA headers (`TS1001-CUS-v<MAJOR>.<MINOR>.<PATCH>.ota`).
+- Wrap it in a proper `.ota` file with the correct Zigbee OTA headers (`TS1001_TYZB01_7qf81wty_Enhanced-v<MAJOR>.<MINOR>.<PATCH>.ota`).
 - Regenerate `ota/index.json` with the new file size and SHA512.
 - Remove your `.s37` file from the folder, commit the `.ota` and `index.json`, and push the result back to `main`.
 

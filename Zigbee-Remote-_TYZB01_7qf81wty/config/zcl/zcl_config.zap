@@ -183,7 +183,7 @@
               "storageOption": "RAM",
               "singleton": 1,
               "bounded": null,
-              "defaultValue": "TS1001-CUS",
+              "defaultValue": "TS1001_TYZB01_7qf81wty_Enhanced",
               "reportable": 0,
               "minInterval": 1,
               "maxInterval": 65534,

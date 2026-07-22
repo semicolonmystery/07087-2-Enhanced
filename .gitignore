@@ -19,3 +19,6 @@ PLAN.md
 *~
 .DS_Store
 **/config/zcl/*.zap~
+commander/
+commander.zip
+scratch_replace.py

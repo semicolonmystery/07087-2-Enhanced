@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file remote_zigbee.h
- * @brief TS1001-CUS Zigbee command layer (F5/F6) — On/Off, Level and Color
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced Zigbee command layer (F5/F6) — On/Off, Level and Color
  *        Temperature to bindings.
  *
  * Milestone 3 (+ M5 color temperature). Every control command is addressed via the BINDING TABLE — no

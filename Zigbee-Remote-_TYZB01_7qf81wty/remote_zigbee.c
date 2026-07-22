@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file remote_zigbee.c
- * @brief TS1001-CUS Zigbee command layer (F5/F6) — implementation.
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced Zigbee command layer (F5/F6) — implementation.
  *
  * See remote_zigbee.h for the contract. Design invariant: fill the command,
  * stamp sourceEndpoint = REMOTE_ENDPOINT, then send to the binding table both

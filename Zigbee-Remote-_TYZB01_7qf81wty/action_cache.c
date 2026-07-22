@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file action_cache.c
- * @brief TS1001-CUS offline action cache with semantic coalescing (F7).
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced offline action cache with semantic coalescing (F7).
  *
  * See action_cache.h for the contract and PLAN.md (M7, F7) for the spec.
  * All amounts/rates come from app_config.h — no magic numbers.

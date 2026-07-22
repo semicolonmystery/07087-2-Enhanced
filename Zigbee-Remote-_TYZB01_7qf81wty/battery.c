@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file battery.c
- * @brief TS1001-CUS battery measurement + Power Configuration reporting (F3).
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced battery measurement + Power Configuration reporting (F3).
  *
  * See battery.h for the contract and PLAN.md (M6, F3) for the spec. Every
  * tunable comes from app_config.h; only fixed hardware facts live here.

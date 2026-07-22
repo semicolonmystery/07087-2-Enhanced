@@ -22,7 +22,7 @@ RAW_URL_TEMPLATE = (
     "https://raw.githubusercontent.com/semicolonmystery/07087-2-Enhanced/"
     "main/ota/{filename}"
 )
-MODEL_ID = "TS1001-CUS"
+MODEL_ID = "TS1001-Enhanced"
 
 
 def parse_ota_header(data: bytes):

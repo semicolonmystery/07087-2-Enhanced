@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file buttons.h
- * @brief TS1001-CUS custom GPIO button driver + debounced gesture state machine.
+ * @brief TS1001_TYZB01_7qf81wty_Enhanced custom GPIO button driver + debounced gesture state machine.
  *
  * Milestone 1. Replaces the stock `simple_button` component (which hardcodes the
  * wrong pins and discards the press that wakes the chip from EM2). This driver

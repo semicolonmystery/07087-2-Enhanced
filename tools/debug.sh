@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# debug.sh — live debug console for the TS1001-CUS remote (Raspberry Pi CM4)
+# debug.sh — live debug console for the TS1001_TYZB01_7qf81wty_Enhanced remote (Raspberry Pi CM4)
 #
 # Modes:
 #   ./debug.sh uart [baud]   Watch the firmware's serial debug log (default,
