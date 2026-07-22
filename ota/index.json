@@ -6,6 +6,15 @@
     "imageType": 0,
     "sha512": "c4e8c9bccf73b2207c7ece7e47c0e16f0ea64a6e679820a658ca9d32a74c30a379877bd14f4c106e4f3a5604a2d7acd00541751a823718831698c2152af4b9c2",
     "url": "https://raw.githubusercontent.com/semicolonmystery/07087-2-Enhanced/main/ota/TS1001-CUS-v1.0.2.ota",
-    "modelId": "TS1001-CUS"
+    "modelId": "TS1001-Enhanced"
+  },
+  {
+    "fileVersion": 16777984,
+    "fileSize": 164870,
+    "manufacturerCode": 4098,
+    "imageType": 0,
+    "sha512": "06eddd4d0a3bb5889510e0766622ab9fdab94670a2af726ee75bdf247d4ed33135111c4ebc2310c633cea975a5ef90b53f3fdfc57b68f582aa6257f5dc36c307",
+    "url": "https://raw.githubusercontent.com/semicolonmystery/07087-2-Enhanced/main/ota/TS1001-Enhanced-v1.0.3.ota",
+    "modelId": "TS1001-Enhanced"
   }
 ]
