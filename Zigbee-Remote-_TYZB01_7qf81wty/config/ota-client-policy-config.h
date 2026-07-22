@@ -31,7 +31,7 @@
 // release (cross-checked by #if in app.c). The full OTA image identity is:
 //   manufacturer code 0x1002 (EMBER_AF_MANUFACTURER_CODE, ZAP default kept
 //   per project decision #4), image type 0x0000 (below), version this value.
-#define EMBER_AF_PLUGIN_OTA_CLIENT_POLICY_FIRMWARE_VERSION   0x01000500
+#define EMBER_AF_PLUGIN_OTA_CLIENT_POLICY_FIRMWARE_VERSION   0x01000700
 
 // <o EMBER_AF_PLUGIN_OTA_CLIENT_POLICY_HARDWARE_VERSION> Hardware Version <0-65535>
 // <i> Default: 0
