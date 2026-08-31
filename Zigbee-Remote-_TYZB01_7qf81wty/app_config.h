@@ -53,14 +53,79 @@
 // ---------------------------------------------------------------------------
 // Sleep / power policy (F4)
 // ---------------------------------------------------------------------------
-#define SLEEP_IDLE_MS               1000    // stay-awake window after any wake before
-                                            //   dropping to EM2 (shorter = less drain)
+#define SLEEP_IDLE_MS               0       // MUST STAY 0. Sleep backoff: forced
+                                            //   stay-awake window after every wake.
+                                            //   This is NOT a "shorter = less drain"
+                                            //   knob — any non-zero value is a huge
+                                            //   battery leak, because the SDK arms the
+                                            //   wake timer for the time to the NEXT
+                                            //   EVENT instead of for the remainder of
+                                            //   the backoff window
+                                            //   (zigbee_app_framework_sleep.c:190-247).
+                                            //   So one wake inside the backoff pins the
+                                            //   MCU in EM1 (~1.5 mA) until the next poll
+                                            //   — i.e. LONG_POLL_S of EM1, then
+                                            //   LONG_POLL_S of EM2, ~50 % EM1 duty
+                                            //   forever. Observed effect: batteries flat
+                                            //   in 1-2 months. 0 = SDK default = the
+                                            //   device drops to EM2 as soon as it is
+                                            //   idle, which is what F4 ("wake only on
+                                            //   button press") actually requires.
 #define TX_GRACE_MS                 500     // max wait for in-flight TX before sleeping
 #define LONG_POLL_S                 1800    // long poll interval (sleepy end device):
                                             //   how often it wakes to poll the parent.
                                             //   30 min — far under the ~256 min parent
                                             //   child-aging timeout, so it stays joined,
                                             //   while cutting periodic radio wakeups.
+
+// ---------------------------------------------------------------------------
+// Poll Control server cluster (0x0020) — the IKEA-style "coordinator may manage
+// my poll rate" contract. Values are in QUARTER-SECONDS (ZCL unit).
+//
+// These are NOT compiled into anything by themselves: the Poll Control server
+// plugin reads them from the ZCL *attribute defaults*, which live in the .zap
+// file and can only be edited in Studio's ZCL editor. This block is the single
+// source of truth for what to type there — see docs/BUILD.md.
+//
+// At startup the plugin pushes LongPollInterval / ShortPollInterval into the
+// end-device-support plugin (poll-control-server.c:441-461), so once the
+// cluster exists these attributes OVERRIDE
+// EMBER_AF_PLUGIN_END_DEVICE_SUPPORT_{LONG,SHORT}_POLL_INTERVAL_SECONDS.
+// That is why POLL_CTRL_LONG_POLL_QS must stay equal to LONG_POLL_S.
+// ---------------------------------------------------------------------------
+#define POLL_CTRL_CHECK_IN_QS       14400   // CheckInInterval (0x0000), ZAP: 0x00003840
+                                            //   Device-initiated "I am alive, does
+                                            //   anyone want me awake?" — this is what
+                                            //   keeps Z2M availability working for a
+                                            //   sleepy device (a Z2M ping can never
+                                            //   reach us: the parent only holds
+                                            //   indirect messages ~7.68 s). Z2M's
+                                            //   poll_control configure step may
+                                            //   rewrite this; that is fine and
+                                            //   expected. 0 would disable check-ins
+                                            //   entirely (poll-control-server.c:148).
+#define POLL_CTRL_LONG_POLL_QS      (LONG_POLL_S * 4)   // LongPollInterval (0x0001),
+                                            //   ZAP: 0x00001C20 (INT32U)
+#define POLL_CTRL_SHORT_POLL_QS     2       // ShortPollInterval (0x0002), ZAP: 0x0002
+                                            //   (INT16U). 0.5 s, used
+                                            //   only while a task is pending.
+#define POLL_CTRL_FAST_POLL_QS      40      // FastPollTimeout (0x0003), ZAP: 0x0028
+                                            //   (INT16U). 10 s cap on a
+                                            //   client-requested fast-poll burst.
+#define POLL_CTRL_LONG_POLL_MIN_QS  20      // LongPollIntervalMin (0x0005), ZAP:
+                                            //   0x00000014 (INT32U). Floor a
+                                            //   client may set (5 s). Battery guard —
+                                            //   without it a misbehaving coordinator
+                                            //   could pin us at a 1 s long poll.
+
+// Plugin constraint (poll-control-server.c:296-311): a long poll interval longer
+// than the check-in interval is rejected as invalid.
+#if POLL_CTRL_LONG_POLL_QS > POLL_CTRL_CHECK_IN_QS
+#error "POLL_CTRL_LONG_POLL_QS must be <= POLL_CTRL_CHECK_IN_QS (see poll-control-server.c:296-311)"
+#endif
+#if POLL_CTRL_LONG_POLL_QS < POLL_CTRL_LONG_POLL_MIN_QS
+#error "POLL_CTRL_LONG_POLL_QS must be >= POLL_CTRL_LONG_POLL_MIN_QS"
+#endif
 
 // ---------------------------------------------------------------------------
 // Battery (F3) — 2×AAA alkaline, VBAT/3 divider, PF2 enable, PB11 sense
@@ -115,11 +180,11 @@
 // ---------------------------------------------------------------------------
 #define FW_VERSION_MAJOR            1
 #define FW_VERSION_MINOR            0
-#define FW_VERSION_PATCH            9
+#define FW_VERSION_PATCH            10
 #define FW_APP_VERSION_ATTR         0x01    // Basic ApplicationVersion (0x0001)
-#define FW_VERSION_STRING           "1.0.9" // Basic SW Build ID (0x4000)
+#define FW_VERSION_STRING           "1.0.10" // Basic SW Build ID (0x4000)
 // OTA image file version: monotonic; 0xMMmmppbb (major.minor.patch.build).
-#define FW_OTA_FILE_VERSION         0x01000900UL
+#define FW_OTA_FILE_VERSION         0x01000A00UL
 
 // ---------------------------------------------------------------------------
 // Debug

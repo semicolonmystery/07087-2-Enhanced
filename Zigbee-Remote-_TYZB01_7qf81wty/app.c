@@ -57,8 +57,29 @@
 #if SL_ZIGBEE_APP_FRAMEWORK_BACKOFF_SLEEP_MS != SLEEP_IDLE_MS
 #error "zigbee_sleep_config.h sleep backoff != SLEEP_IDLE_MS (app_config.h)"
 #endif
+// The sleep backoff is not a tuning knob, it is a battery leak. When it is
+// non-zero, a wake that lands inside the backoff window takes the EM1
+// requirement and then arms the wake timer for the time to the NEXT EVENT
+// (zigbee_app_framework_sleep.c:190-247) rather than for the remainder of the
+// backoff — nothing re-evaluates at the end of the window. With a long poll
+// interval that means a full LONG_POLL_S spent in EM1 (~1.5 mA) after every
+// poll, alternating with LONG_POLL_S in EM2: ~50 % EM1 duty cycle forever,
+// which flattens 2xAAA in 1-2 months. Keep both this and SLEEP_IDLE_MS at 0.
+#if SL_ZIGBEE_APP_FRAMEWORK_BACKOFF_SLEEP_MS != 0
+#error "F4/battery: sleep backoff MUST be 0 — any non-zero value pins the MCU in EM1 for a whole poll interval after every wake (see the note on SLEEP_IDLE_MS in app_config.h)"
+#endif
 #if SL_ZIGBEE_APP_FRAMEWORK_STAY_AWAKE_WHEN_NOT_JOINED != 0
 #error "F4: stay-awake-when-not-joined must be 0 or an unjoined remote never sleeps"
+#endif
+// EMBER_AF_HAS_SLEEPY_NETWORK is derived by app/framework/util/config.h from
+// SLI_ZIGBEE_PRIMARY_NETWORK_DEVICE_TYPE, i.e. from what is actually compiled.
+// A plain End Device keeps its receiver on when idle and never reaches EM2, so
+// this is the single highest-impact battery setting in the project. It also
+// only lives in the .slcp when it is set through Software Components -> Zigbee
+// Device Config; edited on disk, Studio regenerates the header and reverts it
+// silently. This catches that revert at build time instead of in the field.
+#if !defined(EMBER_AF_HAS_SLEEPY_NETWORK)
+#error "F4/battery: device type must be Sleepy End Device — set it in Software Components -> Zigbee Device Config (NOT by editing config/zigbee_device_config.h, which Studio regenerates). See docs/BUILD.md."
 #endif
 #if EMBER_AF_PLUGIN_NETWORK_STEERING_RADIO_TX_POWER != TX_POWER_DBM
 #error "network-steering-config.h radio TX power != TX_POWER_DBM (app_config.h)"
@@ -104,6 +125,26 @@
 #endif
 #if OTA_TRIGGER_HOLD_MS >= STUCK_BUTTON_MS
 #error "F10: OTA trigger hold must stay below the stuck-button cap"
+#endif
+
+//----------------------
+// Poll Control server (cluster 0x0020) cross-checks.
+//
+// The component and the ZCL cluster are two separate things and it is easy to
+// have one without the other: the component only compiles the plugin, the
+// cluster + its attribute defaults only exist if they were added in Studio's
+// ZCL editor. Either half alone is silently useless, so fail the build instead.
+#if defined(SL_CATALOG_ZIGBEE_POLL_CONTROL_SERVER_PRESENT) \
+  && !defined(ZCL_USING_POLL_CONTROL_CLUSTER_SERVER)
+#error "Poll Control: the zigbee_poll_control_server component is installed but the Poll Control (0x0020) SERVER cluster is not enabled on endpoint 1 — add it in the Studio ZCL editor (see docs/BUILD.md)"
+#endif
+#if defined(ZCL_USING_POLL_CONTROL_CLUSTER_SERVER) \
+  && !defined(SL_CATALOG_ZIGBEE_POLL_CONTROL_SERVER_PRESENT)
+#error "Poll Control: the 0x0020 SERVER cluster is enabled in ZAP but the zigbee_poll_control_server component is not installed — nothing implements check-ins"
+#endif
+#if defined(SL_CATALOG_ZIGBEE_POLL_CONTROL_SERVER_PRESENT) \
+  && !defined(ZCL_USING_POLL_CONTROL_CLUSTER_LONG_POLL_INTERVAL_MIN_ATTRIBUTE)
+#error "Poll Control: enable the optional LongPollIntervalMin (0x0005) attribute — without it a client can set an arbitrarily short long poll interval and flatten the battery (POLL_CTRL_LONG_POLL_MIN_QS in app_config.h)"
 #endif
 
 //----------------------

@@ -53,9 +53,25 @@ const definition = {
         // NOTE: the remote is a sleepy end device — wake it (press any button)
         // right when running configure/bind so the requests reach it.
         await reporting.bind(endpoint, coordinatorEndpoint,
-            ['genOnOff', 'genLevelCtrl', 'lightingColorCtrl', 'genPowerCfg']);
+            ['genOnOff', 'genLevelCtrl', 'lightingColorCtrl', 'genPowerCfg',
+             'genPollCtrl']);
         await reporting.batteryPercentageRemaining(endpoint);
         await reporting.batteryVoltage(endpoint);
+
+        // Poll Control (genPollCtrl / cluster 0x0020), same arrangement IKEA
+        // remotes use. The bind above is what makes the cluster do anything at
+        // all: the firmware only sends Check-in commands to devices sitting in
+        // its Poll Control binding table, so without this bind the cluster is
+        // inert. Check-ins are how a sleepy remote stays reachable — a Z2M ping
+        // can never reach it, because its parent only holds indirect messages
+        // for ~7.68 s, far below the 30 min long poll interval.
+        //
+        // 14400 quarter-seconds = 1 h, matching POLL_CTRL_CHECK_IN_QS in the
+        // firmware's app_config.h. Keep the two in sync if you change either.
+        // If this write is not answered the firmware simply short-polls for 8 s
+        // and returns to its long poll — unanswered check-ins are a no-op, not
+        // a failure, so a Z2M version that ignores check-ins costs nothing.
+        await endpoint.write('genPollCtrl', {checkinInterval: 14400});
     },
 };
 

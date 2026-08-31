@@ -26,7 +26,7 @@
 // <o SL_ZIGBEE_APP_FRAMEWORK_BACKOFF_SLEEP_MS> Sleep Backoff time <0-10000>
 // <i> Default: 0
 // <i> This setting will keep a device from going back to sleep immediately upon waking up
-#define SL_ZIGBEE_APP_FRAMEWORK_BACKOFF_SLEEP_MS   1000  // = SLEEP_IDLE_MS (app_config.h); F4 stay-awake window after any wake (cross-checked by #if in app.c)
+#define SL_ZIGBEE_APP_FRAMEWORK_BACKOFF_SLEEP_MS   0  // = SLEEP_IDLE_MS (app_config.h); MUST be 0 — non-zero pins the MCU in EM1 for a whole poll interval after every wake (see the long note on SLEEP_IDLE_MS). Cross-checked by #if in app.c
 
 // <q SL_ZIGBEE_APP_FRAMEWORK_STAY_AWAKE_WHEN_NOT_JOINED> Stay awake when NOT joined
 // <i> Default: TRUE
