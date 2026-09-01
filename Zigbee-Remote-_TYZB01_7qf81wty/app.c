@@ -148,6 +148,62 @@
 #endif
 
 //----------------------
+// Basic cluster version attributes — the firmware identity Z2M displays.
+//
+// Their .zap defaults are fixed literals that nobody remembers to edit: they
+// still read SW Build ID "1.0.0", ApplicationVersion 1, StackVersion 0 and
+// DateCode "20260721" after ten releases, so every version looked identical in
+// Z2M. Rather than maintain them by hand in the ZCL editor once per release,
+// write them at boot from app_config.h, which is already the single source of
+// truth for the version. They can no longer drift.
+//
+// This CANNOT be done inside emberAfMainInitCallback(): the framework calls
+// that hook (zigbee_app_framework_common.c:92) BEFORE emberAfEndpointConfigure()
+// installs the .zap defaults (af-soc.c:65, reached via sli_zigbee_af_initDone),
+// so anything written there is overwritten moments later. A zero-delay event
+// runs from the main loop after init has completed, which is late enough.
+static sl_zigbee_event_t basic_version_event;
+
+// ZCL char strings are length-prefixed (leading octet = length), never
+// NUL-terminated. The .zap allocates 17 bytes (1 length + 16 chars) for both
+// DateCode and SW Build ID (autogen/zap-config.h), so both literals must fit.
+#define BASIC_STRING_MAX  16
+typedef char fw_version_string_must_fit_basic_attr[
+  (sizeof(FW_VERSION_STRING) - 1 <= BASIC_STRING_MAX) ? 1 : -1];
+typedef char fw_date_code_must_fit_basic_attr[
+  (sizeof(FW_DATE_CODE) - 1 <= BASIC_STRING_MAX) ? 1 : -1];
+
+static void basic_write_u8(EmberAfAttributeId attr, uint8_t value)
+{
+  (void)emberAfWriteServerAttribute(REMOTE_ENDPOINT, ZCL_BASIC_CLUSTER_ID,
+                                    attr, &value, ZCL_INT8U_ATTRIBUTE_TYPE);
+}
+
+static void basic_write_string(EmberAfAttributeId attr, const char *s, uint8_t len)
+{
+  uint8_t buf[1 + BASIC_STRING_MAX];
+  buf[0] = len;
+  for (uint8_t i = 0; i < len; i++) {
+    buf[1 + i] = (uint8_t)s[i];
+  }
+  (void)emberAfWriteServerAttribute(REMOTE_ENDPOINT, ZCL_BASIC_CLUSTER_ID,
+                                    attr, buf, ZCL_CHAR_STRING_ATTRIBUTE_TYPE);
+}
+
+static void basic_version_handler(sl_zigbee_event_t *event)
+{
+  (void)event;
+  basic_write_u8(ZCL_APPLICATION_VERSION_ATTRIBUTE_ID, FW_APP_VERSION_ATTR);
+  basic_write_u8(ZCL_STACK_VERSION_ATTRIBUTE_ID, FW_STACK_REL);
+  basic_write_string(ZCL_SW_BUILD_ID_ATTRIBUTE_ID,
+                     FW_VERSION_STRING, sizeof(FW_VERSION_STRING) - 1);
+  basic_write_string(ZCL_DATE_CODE_ATTRIBUTE_ID,
+                     FW_DATE_CODE, sizeof(FW_DATE_CODE) - 1);
+  TS_LOG("Basic: sw %s build %d stack %d.%d",
+         FW_VERSION_STRING, FW_BUILD, FW_STACK_REL, FW_STACK_BUILD);
+}
+
+//----------------------
 // F9 pairing / reset (M8) — the ONLY path that ever starts network steering.
 //
 // ON+OFF held for PAIR_HOLD_MS -> leave network + clear bindings -> steer for
@@ -362,6 +418,10 @@ void emberAfMainInitCallback(void)
   sl_zigbee_event_init(&pairing_hold_event, pairing_hold_handler);
   sl_zigbee_event_init(&pairing_window_event, pairing_window_handler);
   sl_zigbee_event_init(&ota_hold_event, ota_hold_handler);   // M9 (F10)
+  // Basic version attributes: run as soon as the main loop turns over, i.e.
+  // after emberAfEndpointConfigure() has installed the .zap defaults.
+  sl_zigbee_event_init(&basic_version_event, basic_version_handler);
+  sl_zigbee_event_set_active(&basic_version_event);
   battery_init();        // M6 (F3)
   action_cache_init();   // M7 (F7)
   ota_trigger_init();    // M9 (F10)

@@ -112,7 +112,11 @@ tells you where.
 | `OTA_QUERY_GRACE_S` | s | 30 | Idle-session early end (query answered "no image") |
 | `OTA_SLOT0_START/END` | addr | 0x44000/0x74000 | Flash-map ground truth (change only with the bootloader!) |
 | `TX_POWER_DBM` | dBm | 10 | Radio TX power (mirrored in RAIL/steering configs) |
-| `FW_OTA_FILE_VERSION` | – | 0x01000000 | OTA image version — bump together with the `ota-client-policy-config.h` firmware version for every release |
+| `FW_VERSION_STRING` | – | "1.0.11" | Written to Basic SW Build ID (0x4000) at boot by `app.c` |
+| `FW_DATE_CODE` | – | "20260901" | Written to Basic DateCode (0x0006) at boot, `YYYYMMDD` |
+| `FW_BUILD` | – | 11 | Flat build counter; **must increase every release** — see [Versioning](#versioning) |
+| `FW_STACK_REL` / `FW_STACK_BUILD` | – | 7 / 4 | EmberZNet version reported in the OTA file version and Basic StackVersion |
+| `FW_OTA_FILE_VERSION` | – | 0x010B0704 | OTA image version, `app-release.app-build.stack-release.stack-build` — bump together with the `ota-client-policy-config.h` firmware version for every release (both `#if`-guarded) |
 | `DEBUG_UART_ENABLED` | bool | 0 | Reserved; UART debug on PA0/TXD |
 | `DEBUG_LOGGING` | bool | 0 | Master switch for this firmware's own RTT/console logs. 0 = production (all log calls compiled out — silent, zero cost). Set to 1 (and keep `iostream_rtt` + `zigbee_debug_print`) to restore logs |
 
@@ -213,6 +217,48 @@ what a build actually uses.
 The node type is also written to NVM3 when the device joins, so a device that
 joined while built as a plain End Device stays one until it is re-paired
 (ON+OFF for `PAIR_HOLD_MS`).
+
+## Versioning
+
+Two things carry the version, and before v1.0.11 both were wrong.
+
+**The OTA file version.** The Zigbee OTA spec fixes the meaning of its four
+bytes: `app-release . app-build . stack-release . stack-build`. This project
+used to pack `major.minor.patch.build` into them, which put the patch number in
+the **stack release** byte. Decoded correctly, every release looked like an
+unchanged application with a drifting stack version:
+
+```
+v1.0.5   0x01000500   app 1, build 0, stack 0.5
+v1.0.8   0x01000800   app 1, build 0, stack 0.8
+v1.0.10  0x01000A00   app 1, build 0, stack 0.10
+```
+
+Since v1.0.11 the version lives in the application bytes and the stack bytes
+report the real EmberZNet version: `0x010B0704` = app release 1, app build 11,
+stack 7.4. `FW_BUILD` is a flat counter that must increase on every release —
+it is not derived from major/minor/patch, because one byte cannot hold all
+three without collisions (1.0.10 and 1.1.0 would tie).
+
+Three `#if` checks keep this honest: the literal must match
+`MAJOR`/`FW_BUILD`/`FW_STACK_*`, it must exceed `0x01000A00` (the last version
+published under the old scheme, or no device would accept the update), and
+`ota-client-policy-config.h` must agree with it.
+
+**The Basic cluster attributes.** SW Build ID, DateCode, ApplicationVersion and
+StackVersion are what a coordinator displays as the firmware identity. Their
+`.zap` defaults are fixed literals, and nobody remembered to edit them — they
+still read `"1.0.0"` / `20260721` / app 1 / stack 0 after ten releases.
+
+`app.c` now writes all four at boot from `app_config.h`, so they cannot drift
+again and a release needs no ZCL editor work. This runs from a zero-delay event
+rather than `emberAfMainInitCallback()`, because the framework calls that hook
+*before* `emberAfEndpointConfigure()` installs the `.zap` defaults
+(`zigbee_app_framework_common.c:92` vs `af-soc.c:65`) — writing there would be
+silently overwritten. Both strings are length-checked at compile time against
+the 17-byte (1 length + 16 char) attribute allocation.
+
+Release checklist is in [`../ota/README.md`](../ota/README.md).
 
 ### Production vs. debug build
 

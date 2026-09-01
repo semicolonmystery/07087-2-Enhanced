@@ -178,13 +178,54 @@
 // ---------------------------------------------------------------------------
 // Firmware identity / version (keep Basic attrs, converter, and OTA in sync)
 // ---------------------------------------------------------------------------
+// ---- Human-readable version. Bump all four together for a release. --------
 #define FW_VERSION_MAJOR            1
 #define FW_VERSION_MINOR            0
-#define FW_VERSION_PATCH            10
-#define FW_APP_VERSION_ATTR         0x01    // Basic ApplicationVersion (0x0001)
-#define FW_VERSION_STRING           "1.0.10" // Basic SW Build ID (0x4000)
-// OTA image file version: monotonic; 0xMMmmppbb (major.minor.patch.build).
-#define FW_OTA_FILE_VERSION         0x01000A00UL
+#define FW_VERSION_PATCH            11
+#define FW_VERSION_STRING           "1.0.11"   // -> Basic SW Build ID (0x4000)
+#define FW_DATE_CODE                "20260901" // -> Basic DateCode (0x0006), YYYYMMDD
+
+// Flat build counter. MUST increase on EVERY released image — it is the only
+// field that makes FW_OTA_FILE_VERSION grow, and an OTA is offered only when
+// the file version is strictly greater than the running one. It is deliberately
+// NOT derived from major/minor/patch: a single byte cannot encode all three
+// without collisions (1.0.10 and 1.1.0 would tie).
+#define FW_BUILD                    11
+
+// EmberZNet version this image is built against (GSDK 4.4.6 = EmberZNet 7.4.x).
+#define FW_STACK_REL                7
+#define FW_STACK_BUILD              4
+
+#define FW_APP_VERSION_ATTR         FW_BUILD   // -> Basic ApplicationVersion (0x0001)
+
+// ---- Zigbee OTA file version ----------------------------------------------
+// The OTA spec fixes the meaning of these four bytes:
+//   31-24 application release | 23-16 application build
+//   15-8  stack release       |  7-0  stack build
+// Up to and including v1.0.10 this field held major.minor.patch.build, so the
+// PATCH number sat in the STACK RELEASE byte: every release looked to Z2M and
+// other tools like an unchanged application (app 1, build 0) with a moving
+// "stack version" (0.5, 0.8, 0.10...). Since v1.0.11 the version lives in the
+// application bytes and the stack bytes report the real EmberZNet version.
+//
+// Kept as a plain hex literal on purpose: .github/scripts/create_ota.py parses
+// it with the regex `FW_OTA_FILE_VERSION\s+0x([0-9a-fA-F]+)` and would fail on
+// an expression. The #if below is what keeps the literal honest.
+#define FW_OTA_FILE_VERSION         0x010B0704UL
+
+#if FW_OTA_FILE_VERSION != (((FW_VERSION_MAJOR) << 24) | ((FW_BUILD) << 16) \
+                            | ((FW_STACK_REL) << 8) | (FW_STACK_BUILD))
+#error "FW_OTA_FILE_VERSION literal does not match MAJOR/FW_BUILD/FW_STACK_* — recompute it (see the byte layout above)"
+#endif
+
+// Highest file version ever published under the OLD major.minor.patch.build
+// scheme (v1.0.10). Every future image must stay above it or OTA clients will
+// refuse the upgrade. This is a fixed floor marking the scheme change, not a
+// per-release value — incrementing FW_BUILD keeps us clear of it forever.
+#define FW_OTA_LAST_LEGACY_VERSION  0x01000A00UL
+#if FW_OTA_FILE_VERSION <= FW_OTA_LAST_LEGACY_VERSION
+#error "FW_OTA_FILE_VERSION must exceed the last published legacy version (0x01000A00 = v1.0.10) or no device will accept the update"
+#endif
 
 // ---------------------------------------------------------------------------
 // Debug

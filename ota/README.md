@@ -41,13 +41,44 @@ To release a new OTA image for the remote, the `fileVersion` must be strictly gr
 - **Image Type**: `0x0000`
 
 **To publish a new version:**
-1. Bump the version in `app_config.h`:
+
+1. Bump the version block in `app_config.h`. Since v1.0.11 the OTA file version
+   follows the layout the Zigbee OTA spec actually defines —
+   `app-release . app-build . stack-release . stack-build` — instead of
+   `major.minor.patch.build`. (Under the old scheme the patch number sat in the
+   *stack release* byte, so every release showed up in Z2M as an unchanged
+   application with a moving "stack version": 0.5, 0.8, 0.10 …)
+
    ```c
-   #define FW_OTA_FILE_VERSION   0x01000300UL   // e.g., bump to 1.0.3
-   #define FW_VERSION_PATCH      3
-   #define FW_VERSION_STRING     "1.0.3"
+   #define FW_VERSION_PATCH      12
+   #define FW_VERSION_STRING     "1.0.12"   // -> Basic SW Build ID
+   #define FW_DATE_CODE          "20260915" // -> Basic DateCode, YYYYMMDD
+   #define FW_BUILD              12         // MUST increase every release
+   #define FW_OTA_FILE_VERSION   0x010C0704UL
+   //                              ^^ ^^ ^^^^
+   //                              |  |  └── stack 7.4 (EmberZNet, unchanged)
+   //                              |  └───── FW_BUILD (12 = 0x0C)
+   //                              └──────── FW_VERSION_MAJOR
    ```
-2. Make sure you also update `config/ota-client-policy-config.h` (or via Studio GUI) to match `0x01000300`.
+
+   `FW_BUILD` is a flat counter, deliberately not derived from
+   major/minor/patch — one byte cannot hold all three without collisions
+   (1.0.10 and 1.1.0 would tie). It is the only field that makes the file
+   version grow, and an OTA is offered only when the file version is strictly
+   greater than the running one.
+
+   You do not have to compute `FW_OTA_FILE_VERSION` carefully by hand: `#if`
+   checks in `app_config.h` fail the build if the literal disagrees with
+   `MAJOR`/`FW_BUILD`/`FW_STACK_*`, or if it is not above the last version
+   published under the old scheme (`0x01000A00`, v1.0.10). It is kept as a
+   literal rather than an expression because `create_ota.py` parses it with the
+   regex `FW_OTA_FILE_VERSION\s+0x([0-9a-fA-F]+)`.
+
+   The Basic cluster attributes (SW Build ID, DateCode, ApplicationVersion,
+   StackVersion) are written at boot from these constants by `app.c`, so there
+   is nothing to update in the ZCL editor for a release.
+
+2. Make sure you also update `config/ota-client-policy-config.h` (or via Studio GUI) to match — e.g. `0x010C0704`. A `#if` in `app.c` fails the build if the two disagree.
 3. Build the project in Simplicity Studio to get the `.s37` (or `.hex` / `.bin`) file.
 4. Copy the compiled `.s37` file into this `ota/` directory.
 5. `git add`, `commit`, and `push` the `.s37` file to the `main` branch.
