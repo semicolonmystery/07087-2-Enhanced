@@ -201,6 +201,27 @@ static void basic_version_handler(sl_zigbee_event_t *event)
                      FW_DATE_CODE, sizeof(FW_DATE_CODE) - 1);
   TS_LOG("Basic: sw %s build %d stack %d.%d",
          FW_VERSION_STRING, FW_BUILD, FW_STACK_REL, FW_STACK_BUILD);
+
+#ifdef ZCL_USING_POLL_CONTROL_CLUSTER_SERVER
+  // Poll Control ShortPollInterval, for the same reason as the Basic
+  // attributes above: it is the single knob that sets OTA download speed (one
+  // 63-byte Image Block per short poll), it lives in the .zap as a hand-edited
+  // default, and a hand-edited default is exactly the thing that gets forgotten
+  // on a release. Driving it from app_config.h makes POLL_CTRL_SHORT_POLL_QS
+  // authoritative and the .zap value merely the pre-boot seed.
+  //
+  // Writing the attribute is enough to take effect: the plugin's
+  // ServerAttributeChangedCallback re-pushes it into the end-device-support
+  // poll manager (poll-control-server.c:651-663), so the attribute a
+  // coordinator reads and the interval actually used cannot disagree.
+  uint16_t short_poll_qs = POLL_CTRL_SHORT_POLL_QS;
+  (void)emberAfWriteServerAttribute(REMOTE_ENDPOINT, ZCL_POLL_CONTROL_CLUSTER_ID,
+                                    ZCL_SHORT_POLL_INTERVAL_ATTRIBUTE_ID,
+                                    (uint8_t *)&short_poll_qs,
+                                    ZCL_INT16U_ATTRIBUTE_TYPE);
+  TS_LOG("PollCtrl: short poll %d qs (%d ms)",
+         POLL_CTRL_SHORT_POLL_QS, POLL_CTRL_SHORT_POLL_QS * 250);
+#endif
 }
 
 //----------------------

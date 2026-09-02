@@ -174,7 +174,7 @@ silently useless, so `app.c` fails the build if only one is present.
    |---|---|---|---|---|---|---|
    | `CheckInInterval` | 0x0000 | INT32U | `0x00003840` | 14400 | 1 h | `POLL_CTRL_CHECK_IN_QS` |
    | `LongPollInterval` | 0x0001 | INT32U | `0x00001C20` | 7200 | 30 min | `POLL_CTRL_LONG_POLL_QS` |
-   | `ShortPollInterval` | 0x0002 | INT16U | `0x0001` | 1 | 250 ms | `POLL_CTRL_SHORT_POLL_QS` |
+   | `ShortPollInterval` | 0x0002 | INT16U | `0x0001` | 1 | 250 ms | `POLL_CTRL_SHORT_POLL_QS` (also written at boot, see below) |
    | `FastPollTimeout` | 0x0003 | INT16U | `0x0028` | 40 | 10 s | `POLL_CTRL_FAST_POLL_QS` |
    | `LongPollIntervalMin` | 0x0005 | INT32U | `0x00000014` | 20 | 5 s floor | `POLL_CTRL_LONG_POLL_MIN_QS` |
 
@@ -278,7 +278,14 @@ itself, so the download runs at exactly one block per short-poll period:
 ```
 
 250 ms is `POLL_CTRL_SHORT_POLL_QS = 1`, the ZCL minimum for the Poll Control
-`ShortPollInterval` attribute. Short poll only engages while a task is pending,
+`ShortPollInterval` attribute. `app.c` writes that attribute at boot from
+`app_config.h`, so the constant is authoritative and the `.zap` default is only
+the pre-boot seed — the same treatment the Basic version attributes get, and for
+the same reason: a hand-edited `.zap` default is exactly what gets forgotten on a
+release. Writing the attribute is sufficient, because the plugin's
+`ServerAttributeChangedCallback` re-pushes it into the poll manager
+(`poll-control-server.c:651-663`), so the value a coordinator reads and the
+interval actually used cannot drift apart. Short poll only engages while a task is pending,
 so idle battery draw is unchanged. For reference, the sibling Telink project
 reaches ~12 min the same way — same protocol, same one-block-at-a-time flow,
 250 ms poll. Neither project uses Image Page Request.
