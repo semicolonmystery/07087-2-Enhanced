@@ -41,6 +41,12 @@ set -euo pipefail
 # every default path is anchored to the checkout rather than to $PWD or $HOME.
 HERE="${FLASH_SH_HERE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
+# Answer for help before elevating — printing usage should never want root.
+case "${1:-}" in
+  check|app|boot|all|verify|backup|restore|restore-main) ;;
+  *) sed -n '3,36p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac
+
 # GPIO bit-bang needs root: re-exec under sudo transparently.
 if [ "${EUID}" -ne 0 ]; then
     exec sudo FLASH_SH_HERE="$HERE" OPENOCD="${OPENOCD:-}" \
