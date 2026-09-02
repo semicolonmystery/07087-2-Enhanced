@@ -95,19 +95,25 @@ def emit_outputs(**kwargs):
 
 
 def main():
-    build_files = (sorted(OTA_DIR.glob("*.s37"))
-                   + sorted(OTA_DIR.glob("*.hex"))
-                   + sorted(OTA_DIR.glob("*.bin")))
-    if not build_files:
-        print("No .s37, .hex, or .bin files found in ota/. Nothing to release.")
+    # The .s37 is the GBL input; the .hex (if pushed alongside it) is published
+    # as-is so a Raspberry Pi can flash over the wire without Studio, which is
+    # x86_64 only. Studio emits both from every build.
+    s37_files = sorted(OTA_DIR.glob("*.s37")) + sorted(OTA_DIR.glob("*.bin"))
+    hex_files = sorted(OTA_DIR.glob("*.hex"))
+    if not s37_files:
+        print("No .s37 or .bin file found in ota/. Nothing to release.")
         emit_outputs(released="false")
         return
-    if len(build_files) > 1:
-        print(f"Expected exactly one build file in ota/, found {len(build_files)}: "
-              f"{[f.name for f in build_files]}")
+    if len(s37_files) > 1:
+        print(f"Expected exactly one .s37/.bin in ota/, found {len(s37_files)}: "
+              f"{[f.name for f in s37_files]}")
+        sys.exit(1)
+    if len(hex_files) > 1:
+        print(f"Expected at most one .hex in ota/, found {len(hex_files)}: "
+              f"{[f.name for f in hex_files]}")
         sys.exit(1)
 
-    build_file = build_files[0]
+    build_file = s37_files[0]
     ver = parse_app_config()
     version = f"{ver['major']}.{ver['minor']}.{ver['patch']}"
     print(f"Parsed version: v{version} (0x{ver['file_version']:08X})")
@@ -137,16 +143,32 @@ def main():
     print(f"Created {out_name} ({len(ota_data)} bytes)")
     gbl_path.unlink()
 
+    # Publish the wired-flash image under the same versioned name as the .ota.
+    hex_name = ""
+    hex_path = ""
+    if hex_files:
+        hex_out = DIST_DIR / f"TS1001_TYZB01_7qf81wty_Enhanced-v{version}.hex"
+        hex_out.write_bytes(hex_files[0].read_bytes())
+        hex_name = hex_out.name
+        hex_path = str(hex_out.relative_to(REPO_ROOT)).replace("\\", "/")
+        print(f"Staged {hex_name} ({hex_out.stat().st_size} bytes) for release")
+    else:
+        print("No .hex pushed — releasing the .ota only. "
+              "Push the Studio .hex alongside the .s37 to publish a wired-flash image.")
+
     # The raw build output never stays in the repo.
-    subprocess.run(["git", "rm", "-f", str(build_file)], check=False)
-    if build_file.exists():
-        build_file.unlink()
+    for f in [build_file] + hex_files:
+        subprocess.run(["git", "rm", "-f", str(f)], check=False)
+        if f.exists():
+            f.unlink()
 
     emit_outputs(released="true",
                  version=version,
                  tag=f"v{version}",
                  ota_path=str(out_path.relative_to(REPO_ROOT)).replace("\\", "/"),
-                 ota_name=out_name)
+                 ota_name=out_name,
+                 hex_path=hex_path,
+                 hex_name=hex_name)
 
 
 if __name__ == "__main__":

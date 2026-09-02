@@ -17,11 +17,13 @@ tooling, and incremental firmware changes rather than a from-scratch build.
 ```
 Zigbee-Remote-_TYZB01_7qf81wty/          Simplicity Studio application project
 bootloader-storage-internal-single-512k/ Simplicity Studio bootloader project
-tools/                                   flash.sh, debug.sh, efr32.cfg — Pi CM4 + OpenOCD workflow
+flash.sh, debug.sh, fetch.sh, efr32.cfg  Pi CM4 + OpenOCD workflow (repo root, so a clone is usable as-is)
+bin/                                     bootloader-combined.s37 — static, flashed once
+tools/ota-builder/                       Dockerfile for building the .ota locally
 docs/                                    BUILD.md, api-reference.md, images/
-ota/                                     OTA image build guide + hosted index.json
+ota/                                     OTA release guide (artifacts go to GitHub Releases, not the repo)
 z2m/                                     Zigbee2MQTT external converter (ts1001-tyzb01-enhanced.js)
-.github/                                 CI: rebuilds ota/index.json when a .ota is pushed
+.github/                                 CI: turns a pushed .s37/.hex into a GitHub Release (.ota + .hex + index.json)
 ```
 
 The two Simplicity Studio project directories are managed by Studio itself —

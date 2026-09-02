@@ -35,10 +35,9 @@ Close-up of the SWD wires soldered to the TYZS3 module pads:
 
 ## OpenOCD configuration
 
-The adapter and target configuration lives in
-[`tools/efr32.cfg`](tools/efr32.cfg). Copy it to the Pi as `~/efr32.cfg` (the
-scripts in `tools/` look for it there by default, or point them at another
-path with `OPENOCD_CFG=/path/to/efr32.cfg`):
+The adapter and target configuration lives in [`efr32.cfg`](efr32.cfg) at the
+repo root. The scripts resolve it relative to themselves, so a clone needs no
+setup — override with `OPENOCD_CFG=/path/to/efr32.cfg` if you keep it elsewhere:
 
 ```
 adapter driver linuxgpiod
@@ -104,19 +103,35 @@ make -j4
 sudo make install
 ```
 
-## Flashing with `tools/flash.sh`
+## Flashing with `flash.sh`
 
-Copy `tools/flash.sh` and the built images onto the Pi, then run **`backup`
-first** — it dumps the stock firmware so you can restore it later if you
-ever want to go back:
+Everything lives in the clone — there is nothing to copy onto the Pi by hand:
 
 ```sh
-./flash.sh backup
+git clone https://github.com/semicolonmystery/07087-2-Enhanced.git
+cd 07087-2-Enhanced
+
+# Get the firmware. On a Pi, DOWNLOAD it — Simplicity Studio is x86_64 only:
+./fetch.sh                 # -> build/bin/  (latest release; or ./fetch.sh v1.0.13)
+
+# 1) BACK UP THE STOCK FIRMWARE — do this before anything else, once:
+./flash.sh backup          # -> backups/<timestamp>/
+
+# 2) Prove the SWD link is alive:
+./flash.sh check
+
+# 3) First-ever install (bootloader + app); later updates are just `app`:
+./flash.sh all
 ```
 
-This writes `stock_main.bin`, `stock_userdata.bin`, `stock_lockbits.bin`,
-and `stock_btl.bin` into a fresh `backup-<timestamp>/` directory. Nothing
-else in the script creates a backup automatically.
+`backup` writes `stock_main.bin`, `stock_userdata.bin`, `stock_lockbits.bin`
+and `stock_btl.bin` into a fresh `backups/<timestamp>/`. That directory is
+gitignored and is **your only copy of this device's factory firmware** — keep
+it somewhere safe. Nothing else in the script ever creates a backup for you.
+
+> `stock_userdata.bin` contains this device's unique EUI64. Restoring it onto
+> a *different* device would give two radios the same address on your network.
+> Only ever restore a device from its own backup.
 
 Subcommands:
 
@@ -128,14 +143,22 @@ Subcommands:
 | `boot [file.s37]` | Flashes and verifies the Gecko bootloader into the bootloader region, then reboots. |
 | `all` | Flashes bootloader and application in a single OpenOCD session. |
 | `verify [file.hex]` | Verifies flash contents against the given image without writing anything. |
-| `restore [main.bin]` | Writes a stock main-flash dump (from `backup`) back — the undo path. |
+| `restore <dir>` | Restores every `stock_*.bin` found in a backup directory (main, user data, lock bits, bootloader), each size-checked first. The full undo path. |
+| `restore-main <file>` | Restores only the 512 KB main-flash dump. |
 
 The script re-execs itself under `sudo` automatically, since GPIO bit-banging
-needs root. Image filenames default to
-`Zigbee-Remote-_TYZB01_7qf81wty.hex` and
-`bootloader-storage-internal-single-512k-combined.s37` in the current
-directory; override with `APP_IMG=` / `BOOT_IMG=` if yours are named or
-located differently.
+needs root. Every path is resolved relative to the script, not to your working
+directory, so it behaves the same wherever you run it from:
+
+| What | Default |
+|---|---|
+| Application image | `build/bin/TS1001_TYZB01_7qf81wty_Enhanced.hex` (put there by `./fetch.sh`) |
+| Bootloader image | `bin/bootloader-combined.s37` (committed; static) |
+| OpenOCD config | `efr32.cfg` |
+| Backups | `backups/<timestamp>/` |
+
+Override any of them with `APP_IMG=` / `BOOT_IMG=` / `OPENOCD_CFG=`, or pass an
+image path as the second argument.
 
 The flash memory map that these commands write into is documented in
 [docs/BUILD.md](docs/BUILD.md#flash-memory-map-efr32mg13p732f512gm48-512-kb).
@@ -146,7 +169,7 @@ verify and apply one without the Gecko bootloader present at `0x0FE10000`.
 Run `flash.sh boot` (or `all`) at least once so OTA updates can actually
 install.
 
-## Debugging with `tools/debug.sh`
+## Debugging with `debug.sh`
 
 | Mode | What it does |
 |---|---|

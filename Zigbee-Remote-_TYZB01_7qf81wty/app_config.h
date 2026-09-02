@@ -82,10 +82,12 @@
 // Poll Control server cluster (0x0020) — the IKEA-style "coordinator may manage
 // my poll rate" contract. Values are in QUARTER-SECONDS (ZCL unit).
 //
-// These are NOT compiled into anything by themselves: the Poll Control server
-// plugin reads them from the ZCL *attribute defaults*, which live in the .zap
-// file and can only be edited in Studio's ZCL editor. This block is the single
-// source of truth for what to type there — see docs/BUILD.md.
+// The Poll Control server plugin reads these from the ZCL *attribute defaults*
+// in the .zap, which are edited in Studio's ZCL editor. This block is the single
+// source of truth for what to type there — see docs/BUILD.md. ShortPollInterval
+// is additionally written at boot by app.c straight from the constant below, so
+// that one cannot drift from the .zap default (it sets OTA download speed, and
+// was forgotten once already).
 //
 // At startup the plugin pushes LongPollInterval / ShortPollInterval into the
 // end-device-support plugin (poll-control-server.c:441-461), so once the
@@ -200,8 +202,8 @@
 // ---- Human-readable version. Bump all four together for a release. --------
 #define FW_VERSION_MAJOR            1
 #define FW_VERSION_MINOR            0
-#define FW_VERSION_PATCH            12
-#define FW_VERSION_STRING           "1.0.12"   // -> Basic SW Build ID (0x4000)
+#define FW_VERSION_PATCH            13
+#define FW_VERSION_STRING           "1.0.13"   // -> Basic SW Build ID (0x4000)
 #define FW_DATE_CODE                "20260902" // -> Basic DateCode (0x0006), YYYYMMDD
 
 // Flat build counter. MUST increase on EVERY released image — it is the only
@@ -209,7 +211,7 @@
 // the file version is strictly greater than the running one. It is deliberately
 // NOT derived from major/minor/patch: a single byte cannot encode all three
 // without collisions (1.0.10 and 1.1.0 would tie).
-#define FW_BUILD                    12
+#define FW_BUILD                    13
 
 // EmberZNet version this image is built against (GSDK 4.4.6 = EmberZNet 7.4.x).
 #define FW_STACK_REL                7
@@ -230,7 +232,7 @@
 // Kept as a plain hex literal on purpose: .github/scripts/create_ota.py parses
 // it with the regex `FW_OTA_FILE_VERSION\s+0x([0-9a-fA-F]+)` and would fail on
 // an expression. The #if below is what keeps the literal honest.
-#define FW_OTA_FILE_VERSION         0x010C0704UL
+#define FW_OTA_FILE_VERSION         0x010D0704UL
 
 #if FW_OTA_FILE_VERSION != (((FW_VERSION_MAJOR) << 24) | ((FW_BUILD) << 16) \
                             | ((FW_STACK_REL) << 8) | (FW_STACK_BUILD))

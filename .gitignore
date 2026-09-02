@@ -17,6 +17,14 @@ outgoing/
 PLAN.md
 # CI build output for releases (never committed; published as release assets)
 dist/
+# Device stock dumps written by ./flash.sh backup. Never commit these:
+# stock_userdata.bin contains the device's unique EUI64.
+/backups/
+# Firmware downloaded by ./fetch.sh
+/build/
+# Studio bootloader build output; the distributed copy is bin/bootloader-combined.s37
+bootloader-storage-internal-single-512k/artifact/
+__pycache__/
 # misc
 *.o
 *.d

@@ -26,9 +26,12 @@
 # =============================================================================
 set -euo pipefail
 
-REAL_HOME=$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)
+# Anchor the config to this script's directory, not to $PWD or $HOME, so the
+# script works from anywhere in a checkout. Computed before the sudo re-exec in
+# the gdb/rtt modes and carried across via DEBUG_SH_HERE.
+HERE="${DEBUG_SH_HERE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 OPENOCD=${OPENOCD:-openocd}
-OPENOCD_CFG=${OPENOCD_CFG:-$REAL_HOME/efr32.cfg}
+OPENOCD_CFG=${OPENOCD_CFG:-$HERE/efr32.cfg}
 
 mode=${1:-uart}
 
@@ -47,7 +50,7 @@ case "$mode" in
     ;;
 
   gdb)
-    if [ "${EUID}" -ne 0 ]; then exec sudo OPENOCD_CFG="$OPENOCD_CFG" "$0" gdb; fi
+    if [ "${EUID}" -ne 0 ]; then exec sudo DEBUG_SH_HERE="$HERE" OPENOCD="$OPENOCD" OPENOCD_CFG="$OPENOCD_CFG" "$0" gdb; fi
     echo "Starting OpenOCD server: GDB on :3333, telnet on :4444 (Ctrl+C to stop)."
     echo "From your PC:  arm-none-eabi-gdb path/to/app.axf -ex 'target extended-remote testpi:3333'"
     echo "Note: while attached, the chip's sleep behavior is not representative."
@@ -55,7 +58,7 @@ case "$mode" in
     ;;
 
   rtt)
-    if [ "${EUID}" -ne 0 ]; then exec sudo OPENOCD_CFG="$OPENOCD_CFG" "$0" rtt; fi
+    if [ "${EUID}" -ne 0 ]; then exec sudo DEBUG_SH_HERE="$HERE" OPENOCD="$OPENOCD" OPENOCD_CFG="$OPENOCD_CFG" "$0" rtt; fi
     echo "Attaching and starting RTT server on :9090."
     echo "In a second terminal:  nc localhost 9090      (Ctrl+C here stops everything)"
     exec "$OPENOCD" -f "$OPENOCD_CFG" \

@@ -80,17 +80,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.ota.outputs.tag }}
+          HEX_PATH: ${{ steps.ota.outputs.hex_path }}
         run: |
+          # The .hex is optional: a release without one simply has no
+          # wired-flash image for that version.
+          HEX_ASSET=""
+          [ -n "$HEX_PATH" ] && HEX_ASSET="$HEX_PATH"
           # Re-runs must not fail: if the tag/release already exists, overwrite
           # its assets instead of erroring out.
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG exists - updating its assets."
             gh release upload "$TAG" \
-              "${{ steps.ota.outputs.ota_path }}" dist/index.json \
+              "${{ steps.ota.outputs.ota_path }}" dist/index.json $HEX_ASSET \
               --clobber --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$TAG" \
-              "${{ steps.ota.outputs.ota_path }}" dist/index.json \
+              "${{ steps.ota.outputs.ota_path }}" dist/index.json $HEX_ASSET \
               --title "$TAG" \
               --notes "Firmware ${TAG} for the TS1001_TYZB01_7qf81wty_Enhanced remote.
 
@@ -112,6 +117,8 @@ jobs:
           python - <<'PY'
           import hashlib, json, pathlib, struct, sys
           d = pathlib.Path("verify")
+          hexes = [p for p in d.iterdir() if p.suffix == ".hex"]
+          print(f"  assets: {sorted(p.name for p in d.iterdir())}")
           index = json.loads((d / "index.json").read_text())
           assert len(index) == 1, f"expected 1 index entry, got {len(index)}"
           e = index[0]
@@ -130,6 +137,13 @@ jobs:
               "url points at asset": e["url"].endswith(ota.name),
               "payload is a GBL": data[62:66] == bytes.fromhex("eb17a603"),
           }
+          # The wired-flash image must be real Intel HEX and carry the same
+          # version in its name as the .ota, or fetch.sh will 404 on it.
+          if hexes:
+              h = hexes[0]
+              checks["hex is Intel HEX"] = h.read_bytes()[:1] == b":"
+              checks["hex version matches ota"] = (
+                  h.stem.rsplit("-v", 1)[-1] == ota.stem.rsplit("-v", 1)[-1])
           for k, ok in checks.items():
               print(f"  {'OK  ' if ok else 'FAIL'} {k}")
           if not all(checks.values()):
