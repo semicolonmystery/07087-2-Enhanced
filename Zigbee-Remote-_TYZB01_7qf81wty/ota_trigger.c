@@ -50,12 +50,13 @@
 // ---------------------------------------------------------------------------
 // Module state
 // ---------------------------------------------------------------------------
-static sl_zigbee_event_t s_cap_event;     // OTA_SESSION_MAX_S hard lifetime cap
+static sl_zigbee_event_t s_progress_event; // stall watchdog (OTA_PROGRESS_CHECK_S)
 static sl_zigbee_event_t s_check_event;   // OTA_QUERY_GRACE_S idle detector
 static uint64_t s_last_query_ms;          // throttle timestamp (monotonic ms)
 static bool     s_queried_once;           // first wake after boot queries now
 static bool     s_session_active;         // between start and the end funnel
-static sl_zigbee_event_t s_fast_poll_event; // fast poll to accelerate OTA
+static uint32_t s_last_offset;            // FileOffset at the previous check
+static uint8_t  s_stall_count;            // consecutive checks with no progress
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -87,9 +88,8 @@ static void ota_session_end(const char *why, bool stop_client)
     return;
   }
   s_session_active = false;
-  sl_zigbee_event_set_inactive(&s_cap_event);
+  sl_zigbee_event_set_inactive(&s_progress_event);
   sl_zigbee_event_set_inactive(&s_check_event);
-  sl_zigbee_event_set_inactive(&s_fast_poll_event);
   led_effect_stop();                       // OTA breathing off (F8)
   if (stop_client) {
     sli_zigbee_af_ota_client_stop();       // resets state + kills plugin timers
@@ -101,14 +101,46 @@ static void ota_session_end(const char *why, bool stop_client)
 // Event handlers (DSR / main-loop context)
 // ---------------------------------------------------------------------------
 
-/** @brief Hard cap: OTA_SESSION_MAX_S after start, end no matter what. A
- *         mid-download abort keeps the partial image (policy
- *         DELETE_FAILED_DOWNLOADS=0) and the next session resumes from the
- *         saved offset — a large image completes across several sessions. */
-static void ota_cap_handler(sl_zigbee_event_t *event)
+/** @brief Read the OTA client's FileOffset (0x0001) — how many bytes of the
+ *         image the plugin has stored so far. The attribute is enabled on the
+ *         client side and resets to 0xFFFFFFFF when no download is in flight. */
+static uint32_t ota_file_offset(void)
+{
+  uint32_t offset = 0;
+  (void)emberAfReadClientAttribute(REMOTE_ENDPOINT,
+                                   ZCL_OTA_BOOTLOAD_CLUSTER_ID,
+                                   ZCL_FILE_OFFSET_ATTRIBUTE_ID,
+                                   (uint8_t *)&offset,
+                                   sizeof(offset));
+  return offset;
+}
+
+/** @brief Stall watchdog, every OTA_PROGRESS_CHECK_S.
+ *
+ * This replaces the old fixed OTA_SESSION_MAX_S cap. That cap aborted healthy
+ * transfers: a full image legitimately takes ~11 min at the OTA poll rate, so a
+ * 600 s deadline always fired mid-download and one update became several
+ * aborted-and-resumed sessions. What actually indicates a dead session is the
+ * file offset no longer advancing, so bound the session by progress instead.
+ *
+ * A mid-download abort still keeps the partial image (policy
+ * DELETE_FAILED_DOWNLOADS=0) and the next session resumes from the saved offset. */
+static void ota_progress_handler(sl_zigbee_event_t *event)
 {
   (void)event;
-  ota_session_end("session cap", true);
+  if (!s_session_active) {
+    return;
+  }
+  uint32_t offset = ota_file_offset();
+  if (offset != s_last_offset) {
+    s_last_offset = offset;
+    s_stall_count = 0;                     // still moving
+  } else if (++s_stall_count >= OTA_STALL_CHECKS) {
+    ota_session_end("stalled", true);
+    return;
+  }
+  TS_LOG("OTA: offset %d stall %d", offset, s_stall_count);
+  sl_zigbee_event_set_delay_ms(&s_progress_event, OTA_PROGRESS_CHECK_S * 1000UL);
 }
 
 /** @brief Idle check every OTA_QUERY_GRACE_S: discovery + query take seconds;
@@ -129,19 +161,15 @@ static void ota_check_handler(sl_zigbee_event_t *event)
   }
 }
 
-/** @brief Force MAC data polling every 100ms during an active OTA session.
- *         The sleepy end-device support plugin defaults to a 1-second short
- *         poll interval which artificially throttles the OTA speed. This
- *         bypasses it safely. */
-static void ota_fast_poll_handler(sl_zigbee_event_t *event)
-{
-  (void)event;
-  if (!s_session_active) {
-    return;
-  }
-  (void)emberPollForData();
-  sl_zigbee_event_set_delay_ms(&s_fast_poll_event, 100);
-}
+// The old 100 ms emberPollForData() loop that used to live here is gone. It was
+// gated on s_session_active, i.e. on the manual PLUS+MINUS trigger, so an update
+// started from the Z2M button never enabled it — and the measured throughput
+// (1.08 blocks/s, exactly the 1 s short poll) showed it was not doing anything
+// even when it did run. Download speed is now set where the SDK actually reads
+// it: the Poll Control ShortPollInterval attribute (POLL_CTRL_SHORT_POLL_QS =
+// 250 ms). The OTA client already requests EMBER_AF_SHORT_POLL while a block
+// request is outstanding (ota-client.c:477-485), so this applies on every
+// trigger path instead of just the manual one.
 
 // ---------------------------------------------------------------------------
 // Plugin callback override (weak default in ota-client-cb.c:28)
@@ -167,12 +195,13 @@ void emberAfPluginOtaClientPreBootloadCallback(uint8_t srcEndpoint,
 
 void ota_trigger_init(void)
 {
-  sl_zigbee_event_init(&s_cap_event, ota_cap_handler);
+  sl_zigbee_event_init(&s_progress_event, ota_progress_handler);
   sl_zigbee_event_init(&s_check_event, ota_check_handler);
-  sl_zigbee_event_init(&s_fast_poll_event, ota_fast_poll_handler);
   s_last_query_ms  = 0;
   s_queried_once   = false;
   s_session_active = false;
+  s_last_offset    = 0;
+  s_stall_count    = 0;
 }
 
 void ota_trigger_start(bool manual)
@@ -190,14 +219,17 @@ void ota_trigger_start(bool manual)
 
   // Kick off discovery + query. If a session is already mid-download (e.g.
   // resumed by a server Image Notify) this is a no-op — but we still (re)arm
-  // the cap/LED below, adopting that session into the bounded lifecycle.
+  // the watchdog/LED below, adopting that session into the bounded lifecycle.
   emberAfOtaClientStartCallback();
 
   s_session_active = true;
+  // Seed the stall watchdog from the CURRENT offset, so a session that resumes
+  // a partial download does not look like 60 s of no progress on its first check.
+  s_last_offset = ota_file_offset();
+  s_stall_count = 0;
   led_effect_start(LED_EFFECT_OTA, true, 0);   // breathing until session end
-  sl_zigbee_event_set_delay_ms(&s_cap_event, OTA_SESSION_MAX_S * 1000UL);
+  sl_zigbee_event_set_delay_ms(&s_progress_event, OTA_PROGRESS_CHECK_S * 1000UL);
   sl_zigbee_event_set_delay_ms(&s_check_event, OTA_QUERY_GRACE_S * 1000UL);
-  sl_zigbee_event_set_delay_ms(&s_fast_poll_event, 100);
 }
 
 void ota_trigger_on_wake(void)

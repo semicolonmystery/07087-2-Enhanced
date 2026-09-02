@@ -8,12 +8,20 @@ To tell Zigbee2MQTT where to find the latest firmware updates for this specific 
 
 ```yaml
 ota:
-  zigbee_ota_override_index_location: https://raw.githubusercontent.com/semicolonmystery/07087-2-Enhanced/refs/heads/main/ota/index.json
+  zigbee_ota_override_index_location: https://github.com/semicolonmystery/07087-2-Enhanced/releases/latest/download/index.json
 ```
 
 *(If you already have other custom OTA index URLs, you can separate them with commas or as a list depending on your Z2M version, or just append this URL).*
 
 After adding this, **restart Zigbee2MQTT**.
+
+> **If you used this project before v1.0.12, you must change this URL.** It used
+> to point at `raw.githubusercontent.com/.../ota/index.json`, and that file no
+> longer exists. The old path was also actively harmful: raw URLs are served
+> through a CDN with `Cache-Control: max-age=300`, so Z2M could keep reading a
+> stale index for minutes after a release and offer you a version that did not
+> match the image it then downloaded. `releases/latest/download/` always
+> resolves to the newest release's index.
 
 ## 2. Triggering an Update
 
@@ -26,7 +34,17 @@ Because this remote is a "sleepy end device," it only turns on its radio when a 
 5. The device might go back to sleep before the download starts. To force it to stay awake and fetch the update, **hold PLUS + MINUS together for 10 seconds**.
 6. The LED on the remote will start **breathing**, indicating that the OTA download is in progress.
 
-A ~250 KB image over Zigbee takes several minutes. The remote will automatically reboot into the new firmware once the download is fully verified and installed. The update session is hard-capped at 10 minutes per attempt; if it fails or goes to sleep, a partial download is saved and will resume the next time you trigger it.
+The transfer takes roughly **11-13 minutes**. Zigbee moves one 63-byte block
+per MAC data poll, and the remote polls every 250 ms while a block request is
+outstanding (the `ShortPollInterval` attribute of the Poll Control cluster), so
+~166 KB works out to about 2,650 round trips. The remote reboots into the new
+firmware automatically once the download is verified and installed.
+
+There is no fixed time limit on a session. A download is abandoned only if it
+makes **no progress at all** for ~3 minutes; a partial image is saved either way
+and resumes the next time you trigger an update. (Before v1.0.12 there was a
+hard 10-minute cap, which aborted every healthy transfer mid-flight and made one
+update look like several failed ones.)
 
 > **Note**: For the OTA to successfully *apply* after downloading, the **Gecko bootloader** must be present on the device. If you skipped flashing the bootloader during your initial wired installation, the remote will download the update but fail to install it.
 
@@ -84,14 +102,32 @@ To release a new OTA image for the remote, the `fileVersion` must be strictly gr
 5. `git add`, `commit`, and `push` the `.s37` file to the `main` branch.
 
 **Automated GitHub Action**
-When you push the raw `.s37` file to `main`, a GitHub Action automatically runs:
-- It uses Simplicity Commander to compress the `.s37` into an LZMA `.gbl`.
-- It wraps the `.gbl` with the 56-byte Zigbee OTA header, creating `TS1001_TYZB01_7qf81wty_Enhanced-v<MAJOR>.<MINOR>.<PATCH>.ota`.
-- It rewrites `index.json` to point to the newly generated `.ota` file.
-- It deletes your raw `.s37` and commits the final OTA artifacts back to the repo.
+When you push the raw `.s37` file to `main`, a GitHub Action automatically:
+- uses Simplicity Commander to compress it into an LZMA `.gbl`;
+- wraps that in the 56-byte Zigbee OTA header, producing
+  `TS1001_TYZB01_7qf81wty_Enhanced-v<MAJOR>.<MINOR>.<PATCH>.ota`;
+- builds a single-entry `index.json` whose fields are read back out of the
+  `.ota`'s own header, so the index can never disagree with the image;
+- publishes both as assets of a **GitHub Release** tagged `v<MAJOR>.<MINOR>.<PATCH>`
+  (re-runs update the existing release rather than failing);
+- downloads the published assets again and verifies magic, size, sha512,
+  fileVersion and manufacturer/image type before finishing;
+- deletes your raw `.s37` from the repo.
+
+Firmware binaries are **never committed to the repo** any more — `ota/` holds
+this README and nothing else. Everything is served from Release assets, which is
+what makes a new version visible to Z2M immediately.
 
 **Local Build Alternative**
-If you prefer to build the OTA image locally, drop the `.s37` into the `ota/` folder and run the provided Docker image from the repo root:
+To produce the `.ota` locally without CI, drop the `.s37` into `ota/` and run the
+provided Docker image from the repo root:
 1. `docker build -t ota-builder tools/ota-builder`
 2. `docker run --rm -v ${PWD}:/repo ota-builder`
-This executes the exact same pipeline locally and updates `index.json`.
+
+This runs the same `create_ota.py` and leaves the image in `dist/`. It does not
+produce an index — `index.json` needs the release-asset URL, which only exists
+once the release is published, so build it separately if you need one:
+
+```sh
+python3 .github/scripts/build_ota_index.py dist/<name>.ota   --url "https://github.com/<owner>/<repo>/releases/download/<tag>/<name>.ota"   --model-id TS1001_TYZB01_7qf81wty_Enhanced   --manufacturer-name DIY-Immax --out dist/index.json
+```

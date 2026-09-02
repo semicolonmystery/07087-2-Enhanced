@@ -1,4 +1,16 @@
-name: Build OTA and Rebuild Index
+name: Build OTA and Publish Release
+
+# Push the Studio build output (ota/*.s37) to main and this workflow turns it
+# into a Zigbee OTA image, publishes it as a GitHub Release, and attaches the
+# Zigbee2MQTT index alongside it.
+#
+# The .ota and index.json are NOT committed back into the repo. They used to be,
+# and Z2M kept reading a stale index for minutes afterwards: raw.githubusercontent
+# .com is served through Fastly with Cache-Control: max-age=300. Release assets
+# plus the /releases/latest/download/ alias make a new image visible immediately.
+#
+# Z2M points at:
+#   https://github.com/<owner>/<repo>/releases/latest/download/index.json
 
 on:
   push:
@@ -7,15 +19,19 @@ on:
       - 'ota/*.s37'
       - 'ota/*.hex'
       - 'ota/*.bin'
-      - 'ota/*.ota'
       - '.github/workflows/build-ota.yml'
       - '.github/scripts/create_ota.py'
+      - '.github/scripts/build_ota_index.py'
 
 permissions:
   contents: write
 
+env:
+  MODEL_ID: TS1001_TYZB01_7qf81wty_Enhanced
+  MANUFACTURER_NAME: DIY-Immax
+
 jobs:
-  build-and-index:
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,20 +60,92 @@ jobs:
       - name: Add Commander to PATH
         run: echo "${GITHUB_WORKSPACE}/commander" >> $GITHUB_PATH
 
-      - name: Process any new firmware builds into .ota
+      - name: Build the .ota from the pushed firmware
+        id: ota
         run: python .github/scripts/create_ota.py
 
-      - name: Rebuild ota/index.json
-        run: python .github/scripts/build_ota_index.py
+      - name: Build the Zigbee2MQTT OTA index
+        if: steps.ota.outputs.released == 'true'
+        run: |
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ steps.ota.outputs.tag }}/${{ steps.ota.outputs.ota_name }}"
+          python .github/scripts/build_ota_index.py "${{ steps.ota.outputs.ota_path }}" \
+            --url "$URL" \
+            --model-id "${MODEL_ID}" \
+            --manufacturer-name "${MANUFACTURER_NAME}" \
+            --out dist/index.json
+          cat dist/index.json
 
-      - name: Commit and push if changed
+      - name: Publish the GitHub Release
+        if: steps.ota.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ota.outputs.tag }}
+        run: |
+          # Re-runs must not fail: if the tag/release already exists, overwrite
+          # its assets instead of erroring out.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG exists - updating its assets."
+            gh release upload "$TAG" \
+              "${{ steps.ota.outputs.ota_path }}" dist/index.json \
+              --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" \
+              "${{ steps.ota.outputs.ota_path }}" dist/index.json \
+              --title "$TAG" \
+              --notes "Firmware ${TAG} for the TS1001_TYZB01_7qf81wty_Enhanced remote.
+
+          Zigbee2MQTT picks this up automatically via:
+          \`https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/index.json\`" \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+
+      - name: Verify the published assets
+        if: steps.ota.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ota.outputs.tag }}
+        run: |
+          # Fetch back what was actually published and prove it matches what we
+          # built - a mismatched index is exactly what breaks an OTA at 99%.
+          mkdir -p verify
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir verify --clobber
+          python - <<'PY'
+          import hashlib, json, pathlib, struct, sys
+          d = pathlib.Path("verify")
+          index = json.loads((d / "index.json").read_text())
+          assert len(index) == 1, f"expected 1 index entry, got {len(index)}"
+          e = index[0]
+          ota = next(p for p in d.iterdir() if p.suffix == ".ota")
+          data = ota.read_bytes()
+          hdr = struct.Struct("<I5HIH32sI")
+          magic, _, _, _, mfg, itype, fver, _, _, total = hdr.unpack(data[:hdr.size])
+          checks = {
+              "ota magic":        magic == 0x0BEEF11E,
+              "totalImageSize":   total == len(data),
+              "index fileSize":   e["fileSize"] == len(data),
+              "index fileVersion": e["fileVersion"] == fver,
+              "index mfgCode":    e["manufacturerCode"] == mfg,
+              "index imageType":  e["imageType"] == itype,
+              "index sha512":     e["sha512"] == hashlib.sha512(data).hexdigest(),
+              "url points at asset": e["url"].endswith(ota.name),
+              "payload is a GBL": data[62:66] == bytes.fromhex("eb17a603"),
+          }
+          for k, ok in checks.items():
+              print(f"  {'OK  ' if ok else 'FAIL'} {k}")
+          if not all(checks.values()):
+              sys.exit("published assets are inconsistent")
+          print(f"verified {ota.name}: fileVersion=0x{fver:08X} size={total}")
+          PY
+
+      - name: Commit removal of the raw firmware build
+        if: steps.ota.outputs.released == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ota/
+          git add -A ota/
           if git diff --cached --quiet; then
-            echo "No changes to ota/ folder"
+            echo "Nothing to commit."
           else
-            git commit -m "ota: process firmware build and update index [skip ci]"
+            git commit -m "ota: publish ${{ steps.ota.outputs.tag }} as a release [skip ci]"
             git push
           fi

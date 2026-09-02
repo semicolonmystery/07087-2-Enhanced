@@ -32,7 +32,7 @@
 // <i> How often the client queries the OTA server for a new upgrade image.
 // M9 (F10): 5 -> 1440 (= OTA_QUERY_MIN_INTERVAL_S / 60, cross-checked in
 // app.c). Backstop only: after any query the plugin re-arms its own periodic
-// query timer; the app's session cap (OTA_SESSION_MAX_S / OTA_QUERY_GRACE_S in
+// query timer; the app's session bounds (stall watchdog / OTA_QUERY_GRACE_S in
 // ota_trigger.c) normally stops the state machine long before this fires, so
 // the plugin never wakes the device on its own more than once per day even if
 // a session is somehow left running.

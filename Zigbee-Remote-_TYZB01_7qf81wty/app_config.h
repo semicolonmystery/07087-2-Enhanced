@@ -106,9 +106,20 @@
                                             //   entirely (poll-control-server.c:148).
 #define POLL_CTRL_LONG_POLL_QS      (LONG_POLL_S * 4)   // LongPollInterval (0x0001),
                                             //   ZAP: 0x00001C20 (INT32U)
-#define POLL_CTRL_SHORT_POLL_QS     2       // ShortPollInterval (0x0002), ZAP: 0x0002
-                                            //   (INT16U). 0.5 s, used
-                                            //   only while a task is pending.
+#define POLL_CTRL_SHORT_POLL_QS     1       // ShortPollInterval (0x0002), ZAP: 0x0001
+                                            //   (INT16U). 250 ms — the ZCL minimum,
+                                            //   and THE knob that sets OTA download
+                                            //   speed. The SDK's OTA client asks for
+                                            //   EMBER_AF_SHORT_POLL while an Image
+                                            //   Block Request is outstanding
+                                            //   (ota-client.c:477-485) but never
+                                            //   shortens the interval itself, so one
+                                            //   63-byte block moves per short poll:
+                                            //   at 1 s that is ~44 min for a 166 KB
+                                            //   image, at 250 ms it is ~11 min.
+                                            //   Short poll only engages while a task
+                                            //   is pending, so idle drain is
+                                            //   unaffected.
 #define POLL_CTRL_FAST_POLL_QS      40      // FastPollTimeout (0x0003), ZAP: 0x0028
                                             //   (INT16U). 10 s cap on a
                                             //   client-requested fast-poll burst.
@@ -155,10 +166,18 @@
                                             //   one auto OTA query / day
 #define OTA_TRIGGER_HOLD_MS         10000   // PLUS+MINUS hold to force OTA query
                                             //   (spec default 5000; user raised to 10 s)
-#define OTA_SESSION_MAX_S           600     // hard cap: an OTA session (query or
-                                            //   download) is aborted after this
-                                            //   long; partial downloads are kept
-                                            //   and resume on the next session
+// A download is bounded by PROGRESS, not by wall-clock time. There used to be a
+// fixed 600 s session cap here, which aborted perfectly healthy transfers: a
+// full image legitimately takes ~11 min at the OTA poll rate, so the cap fired
+// mid-download every time and the user saw one update as several aborted and
+// resumed sessions. The session now ends only when the file offset stops
+// advancing for OTA_PROGRESS_CHECK_S * OTA_STALL_CHECKS, which catches a real stall
+// (server gone, parent lost) without punishing a slow-but-working transfer.
+#define OTA_PROGRESS_CHECK_S        60      // how often to sample the OTA client's
+                                            //   FileOffset attribute during a session
+#define OTA_STALL_CHECKS            3       // consecutive samples with no progress
+                                            //   before the session is aborted
+                                            //   (=> ~180 s of true silence)
 #define OTA_QUERY_GRACE_S           30      // after starting a session, how long
                                             //   discovery+query may take before an
                                             //   idle session is ended early (LED
@@ -181,16 +200,16 @@
 // ---- Human-readable version. Bump all four together for a release. --------
 #define FW_VERSION_MAJOR            1
 #define FW_VERSION_MINOR            0
-#define FW_VERSION_PATCH            11
-#define FW_VERSION_STRING           "1.0.11"   // -> Basic SW Build ID (0x4000)
-#define FW_DATE_CODE                "20260901" // -> Basic DateCode (0x0006), YYYYMMDD
+#define FW_VERSION_PATCH            12
+#define FW_VERSION_STRING           "1.0.12"   // -> Basic SW Build ID (0x4000)
+#define FW_DATE_CODE                "20260902" // -> Basic DateCode (0x0006), YYYYMMDD
 
 // Flat build counter. MUST increase on EVERY released image — it is the only
 // field that makes FW_OTA_FILE_VERSION grow, and an OTA is offered only when
 // the file version is strictly greater than the running one. It is deliberately
 // NOT derived from major/minor/patch: a single byte cannot encode all three
 // without collisions (1.0.10 and 1.1.0 would tie).
-#define FW_BUILD                    11
+#define FW_BUILD                    12
 
 // EmberZNet version this image is built against (GSDK 4.4.6 = EmberZNet 7.4.x).
 #define FW_STACK_REL                7
@@ -211,7 +230,7 @@
 // Kept as a plain hex literal on purpose: .github/scripts/create_ota.py parses
 // it with the regex `FW_OTA_FILE_VERSION\s+0x([0-9a-fA-F]+)` and would fail on
 // an expression. The #if below is what keeps the literal honest.
-#define FW_OTA_FILE_VERSION         0x010B0704UL
+#define FW_OTA_FILE_VERSION         0x010C0704UL
 
 #if FW_OTA_FILE_VERSION != (((FW_VERSION_MAJOR) << 24) | ((FW_BUILD) << 16) \
                             | ((FW_STACK_REL) << 8) | (FW_STACK_BUILD))

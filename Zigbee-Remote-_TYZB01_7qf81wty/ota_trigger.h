@@ -21,10 +21,14 @@
  *   end     : ONE funnel (all paths):
  *             - idle check every OTA_QUERY_GRACE_S — "no image / no server /
  *               aborted" sessions end within seconds, LED off, sleep;
- *             - hard cap OTA_SESSION_MAX_S — aborts even a mid-download
- *               session (partial download is preserved, see
- *               DELETE_FAILED_DOWNLOADS=0 in ota-client-policy-config.h, and
- *               resumes next session);
+ *             - stall watchdog: the OTA client's FileOffset is sampled every
+ *               OTA_PROGRESS_CHECK_S and the session is aborted only after
+ *               OTA_STALL_CHECKS samples with NO progress. (There used to be a
+ *               fixed OTA_SESSION_MAX_S cap here; it aborted healthy transfers,
+ *               because a full image legitimately takes ~11 min.) A partial
+ *               download is preserved either way — see
+ *               DELETE_FAILED_DOWNLOADS=0 in ota-client-policy-config.h — and
+ *               resumes next session;
  *             - about-to-bootload (emberAfPluginOtaClientPreBootloadCallback)
  *               — LED off, no client abort, device reboots into new image.
  ******************************************************************************/

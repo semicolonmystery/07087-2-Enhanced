@@ -96,7 +96,7 @@ tells you where.
 | `LONG_POLL_S` | s | 1800 | Parent poll interval when idle (mirrored in `end-device-support-config.h`, and in the Poll Control `LongPollInterval` attribute once that cluster exists) |
 | `POLL_CTRL_CHECK_IN_QS` | qs | 14400 | Poll Control `CheckInInterval` (1 h) — ZAP attribute default |
 | `POLL_CTRL_LONG_POLL_QS` | qs | 7200 | Poll Control `LongPollInterval` — ZAP attribute default, kept `= LONG_POLL_S * 4` |
-| `POLL_CTRL_SHORT_POLL_QS` | qs | 2 | Poll Control `ShortPollInterval` (0.5 s) — ZAP attribute default |
+| `POLL_CTRL_SHORT_POLL_QS` | qs | 1 | Poll Control `ShortPollInterval` (250 ms) — ZAP attribute default; **this sets OTA download speed**, see [OTA download speed](#ota-download-speed) |
 | `POLL_CTRL_FAST_POLL_QS` | qs | 40 | Poll Control `FastPollTimeout` (10 s) — ZAP attribute default |
 | `POLL_CTRL_LONG_POLL_MIN_QS` | qs | 20 | Poll Control `LongPollIntervalMin` (5 s floor) — ZAP attribute default |
 | `BATTERY_SETTLE_MS` | ms | 10 | Divider settle time before ADC sample |
@@ -108,15 +108,16 @@ tells you where.
 | `PAIR_WINDOW_MS` | ms | 30000 | Join window length |
 | `OTA_QUERY_MIN_INTERVAL_S` | s | 86400 | Auto OTA check at most once per this interval (mirrored: `ota-client-config.h` query delay) |
 | `OTA_TRIGGER_HOLD_MS` | ms | 10000 | PLUS+MINUS hold for manual OTA check |
-| `OTA_SESSION_MAX_S` | s | 600 | Hard cap on one OTA session (partial download kept) |
+| `OTA_PROGRESS_CHECK_S` | s | 60 | Stall watchdog: how often the OTA FileOffset is sampled |
+| `OTA_STALL_CHECKS` | – | 3 | Samples with no progress before a session is aborted (~180 s) |
 | `OTA_QUERY_GRACE_S` | s | 30 | Idle-session early end (query answered "no image") |
 | `OTA_SLOT0_START/END` | addr | 0x44000/0x74000 | Flash-map ground truth (change only with the bootloader!) |
 | `TX_POWER_DBM` | dBm | 10 | Radio TX power (mirrored in RAIL/steering configs) |
-| `FW_VERSION_STRING` | – | "1.0.11" | Written to Basic SW Build ID (0x4000) at boot by `app.c` |
-| `FW_DATE_CODE` | – | "20260901" | Written to Basic DateCode (0x0006) at boot, `YYYYMMDD` |
-| `FW_BUILD` | – | 11 | Flat build counter; **must increase every release** — see [Versioning](#versioning) |
+| `FW_VERSION_STRING` | – | "1.0.12" | Written to Basic SW Build ID (0x4000) at boot by `app.c` |
+| `FW_DATE_CODE` | – | "20260902" | Written to Basic DateCode (0x0006) at boot, `YYYYMMDD` |
+| `FW_BUILD` | – | 12 | Flat build counter; **must increase every release** — see [Versioning](#versioning) |
 | `FW_STACK_REL` / `FW_STACK_BUILD` | – | 7 / 4 | EmberZNet version reported in the OTA file version and Basic StackVersion |
-| `FW_OTA_FILE_VERSION` | – | 0x010B0704 | OTA image version, `app-release.app-build.stack-release.stack-build` — bump together with the `ota-client-policy-config.h` firmware version for every release (both `#if`-guarded) |
+| `FW_OTA_FILE_VERSION` | – | 0x010C0704 | OTA image version, `app-release.app-build.stack-release.stack-build` — bump together with the `ota-client-policy-config.h` firmware version for every release (both `#if`-guarded) |
 | `DEBUG_UART_ENABLED` | bool | 0 | Reserved; UART debug on PA0/TXD |
 | `DEBUG_LOGGING` | bool | 0 | Master switch for this firmware's own RTT/console logs. 0 = production (all log calls compiled out — silent, zero cost). Set to 1 (and keep `iostream_rtt` + `zigbee_debug_print`) to restore logs |
 
@@ -173,7 +174,7 @@ silently useless, so `app.c` fails the build if only one is present.
    |---|---|---|---|---|---|---|
    | `CheckInInterval` | 0x0000 | INT32U | `0x00003840` | 14400 | 1 h | `POLL_CTRL_CHECK_IN_QS` |
    | `LongPollInterval` | 0x0001 | INT32U | `0x00001C20` | 7200 | 30 min | `POLL_CTRL_LONG_POLL_QS` |
-   | `ShortPollInterval` | 0x0002 | INT16U | `0x0002` | 2 | 0.5 s | `POLL_CTRL_SHORT_POLL_QS` |
+   | `ShortPollInterval` | 0x0002 | INT16U | `0x0001` | 1 | 250 ms | `POLL_CTRL_SHORT_POLL_QS` |
    | `FastPollTimeout` | 0x0003 | INT16U | `0x0028` | 40 | 10 s | `POLL_CTRL_FAST_POLL_QS` |
    | `LongPollIntervalMin` | 0x0005 | INT32U | `0x00000014` | 20 | 5 s floor | `POLL_CTRL_LONG_POLL_MIN_QS` |
 
@@ -259,6 +260,35 @@ silently overwritten. Both strings are length-checked at compile time against
 the 17-byte (1 length + 16 char) attribute allocation.
 
 Release checklist is in [`../ota/README.md`](../ota/README.md).
+
+## OTA download speed
+
+A ~166 KB image used to take ~40 minutes and was usually aborted before it
+finished. Two separate causes, both fixed in v1.0.12.
+
+**Poll rate.** Zigbee moves one Image Block per MAC data poll, and the block
+size is fixed by the SDK at 63 bytes (`MAX_CLIENT_DATA_SIZE`, hard-coded in
+`ota-client.c:159`). The OTA client asks for `EMBER_AF_SHORT_POLL` while a block
+request is outstanding (`ota-client.c:477-485`) but never shortens the interval
+itself, so the download runs at exactly one block per short-poll period:
+
+```
+166,656 B / 63 B = 2,646 blocks   x 1000 ms = 2646 s = 44 min   (before)
+                                  x  250 ms =  661 s = 11 min   (now)
+```
+
+250 ms is `POLL_CTRL_SHORT_POLL_QS = 1`, the ZCL minimum for the Poll Control
+`ShortPollInterval` attribute. Short poll only engages while a task is pending,
+so idle battery draw is unchanged. For reference, the sibling Telink project
+reaches ~12 min the same way — same protocol, same one-block-at-a-time flow,
+250 ms poll. Neither project uses Image Page Request.
+
+**Session bounding.** `OTA_SESSION_MAX_S` used to abort any session after 600 s.
+Since a healthy transfer legitimately takes ~11 minutes, that cap fired
+mid-download every single time and one update appeared as several failed ones.
+`ota_trigger.c` now samples the OTA client's `FileOffset` attribute every
+`OTA_PROGRESS_CHECK_S` and gives up only after `OTA_STALL_CHECKS` samples with
+no movement — bounding the session by progress rather than by the clock.
 
 ### Production vs. debug build
 

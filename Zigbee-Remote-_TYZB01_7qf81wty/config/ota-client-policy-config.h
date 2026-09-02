@@ -31,7 +31,7 @@
 // release (cross-checked by #if in app.c). The full OTA image identity is:
 //   manufacturer code 0x1002 (EMBER_AF_MANUFACTURER_CODE, ZAP default kept
 //   per project decision #4), image type 0x0000 (below), version this value.
-#define EMBER_AF_PLUGIN_OTA_CLIENT_POLICY_FIRMWARE_VERSION   0x010B0704
+#define EMBER_AF_PLUGIN_OTA_CLIENT_POLICY_FIRMWARE_VERSION   0x010C0704
 
 // <o EMBER_AF_PLUGIN_OTA_CLIENT_POLICY_HARDWARE_VERSION> Hardware Version <0-65535>
 // <i> Default: 0
@@ -52,7 +52,7 @@
 // <i> Default: TRUE
 // <i> This causes the device to delete any image (partial or complete) that has been downloaded but did not pass verification or when the server tells us to abort the download or upgrade.
 // M9 (F10): 1 -> 0. REQUIRED for the session cap to work: aborting a session
-// (OTA_SESSION_MAX_S) funnels through emberAfOtaClientDownloadCompleteCallback
+// (stall watchdog) funnels through emberAfOtaClientDownloadCompleteCallback
 // with a non-success result (ota-client-policy.c:149) which, with this at 1,
 // would ERASE the partial download every time — and a full image takes several
 // capped sessions at sleepy-poll pace. With 0 the partial file is kept and the
