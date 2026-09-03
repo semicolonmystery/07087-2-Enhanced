@@ -120,11 +120,11 @@ tells you where.
 | `OTA_QUERY_GRACE_S` | s | 30 | Idle-session early end (query answered "no image") |
 | `OTA_SLOT0_START/END` | addr | 0x44000/0x74000 | Flash-map ground truth (change only with the bootloader!) |
 | `TX_POWER_DBM` | dBm | 10 | Radio TX power (mirrored in RAIL/steering configs) |
-| `FW_VERSION_STRING` | – | "1.0.13" | Written to Basic SW Build ID (0x4000) at boot by `app.c` |
-| `FW_DATE_CODE` | – | "20260902" | Written to Basic DateCode (0x0006) at boot, `YYYYMMDD` |
-| `FW_BUILD` | – | 13 | Flat build counter; **must increase every release** — see [Versioning](#versioning) |
+| `FW_VERSION_STRING` | – | "1.0.14" | Written to Basic SW Build ID (0x4000) at boot by `app.c` |
+| `FW_DATE_CODE` | – | "20260903" | Written to Basic DateCode (0x0006) at boot, `YYYYMMDD` |
+| `FW_BUILD` | – | 14 | Flat build counter; **must increase every release** — see [Versioning](#versioning) |
 | `FW_STACK_REL` / `FW_STACK_BUILD` | – | 7 / 4 | EmberZNet version reported in the OTA file version and Basic StackVersion |
-| `FW_OTA_FILE_VERSION` | – | 0x010D0704 | OTA image version, `app-release.app-build.stack-release.stack-build` — bump together with the `ota-client-policy-config.h` firmware version for every release (both `#if`-guarded) |
+| `FW_OTA_FILE_VERSION` | – | 0x010E0704 | OTA image version, `app-release.app-build.stack-release.stack-build` — bump together with the `ota-client-policy-config.h` firmware version for every release (both `#if`-guarded) |
 | `DEBUG_UART_ENABLED` | bool | 0 | Reserved; UART debug on PA0/TXD |
 | `DEBUG_LOGGING` | bool | 0 | Master switch for this firmware's own RTT/console logs. 0 = production (all log calls compiled out — silent, zero cost). Set to 1 (and keep `iostream_rtt` + `zigbee_debug_print`) to restore logs |
 
