@@ -95,10 +95,11 @@ checks automatically at most once a day when it wakes. See
 [`ota/README.md`](ota/README.md) for how images are built and published.
 
 Zigbee2MQTT can be pointed directly at the hosted OTA index for this
-project:
+project — add this to `zigbee_ota_override_index_location` in your Z2M
+`configuration.yaml`:
 
 ```
-https://raw.githubusercontent.com/semicolonmystery/07087-2-Enhanced/main/ota/index.json
+https://github.com/semicolonmystery/07087-2-Enhanced/releases/latest/download/index.json
 ```
 
 ## Building from source
