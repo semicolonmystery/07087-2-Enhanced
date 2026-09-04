@@ -48,7 +48,7 @@
 // <o EMBER_AF_PLUGIN_OTA_STORAGE_SIMPLE_EEPROM_STORAGE_START> OTA Storage Start Offset <0-4294967295>
 // <i> Default: 0
 // <i> This is the starting offset for where the OTA image will be stored in the EEPROM.
-// M9 (F10): 0 -> 278528 (0x44000) = bootloader storage slot 0 start. For the
+// M9 (F10): 0 -> 262144 (0x44000) = bootloader storage slot 0 start. For the
 // INTERNAL-flash storage bootloader these "EEPROM offsets" are ABSOLUTE flash
 // addresses: the eeprom component maps to halAppBootloaderRead/Write/EraseRaw-
 // Storage (util/plugin/plugin-common/eeprom/eeprom.c:81-93) which pass the
@@ -56,15 +56,15 @@
 // range-checks it against real flash addresses (platform/bootloader/storage/
 // internal_flash/btl_storage_internal_flash.c:127-147). = OTA_SLOT0_START
 // (app_config.h, cross-checked by #if in app.c).
-#define EMBER_AF_PLUGIN_OTA_STORAGE_SIMPLE_EEPROM_STORAGE_START   278528
+#define EMBER_AF_PLUGIN_OTA_STORAGE_SIMPLE_EEPROM_STORAGE_START   262144
 
 // <o EMBER_AF_PLUGIN_OTA_STORAGE_SIMPLE_EEPROM_STORAGE_END> OTA Storage End Offset <0-4294967295>
 // <i> Default: 262144
 // <i> This is the last offset for where the OTA image may be stored in the EEPROM.
-// M9 (F10): 262144 -> 475136 (0x74000) = slot 0 start + 196608 (192 KB) =
+// M9 (F10): 262144 -> 487424 (0x74000) = slot 0 start + 196608 (192 KB) =
 // OTA_SLOT0_END (app_config.h). The default (262144 = 0x40000) pointed INSIDE
 // the application area and would have bricked the running image on download.
-#define EMBER_AF_PLUGIN_OTA_STORAGE_SIMPLE_EEPROM_STORAGE_END   475136
+#define EMBER_AF_PLUGIN_OTA_STORAGE_SIMPLE_EEPROM_STORAGE_END   487424
 
 // <q EMBER_AF_PLUGIN_OTA_STORAGE_SIMPLE_EEPROM_READ_MODIFY_WRITE_SUPPORT> SOC Read-Modify-Write Support
 // <i> Default: FALSE

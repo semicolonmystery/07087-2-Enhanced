@@ -61,12 +61,28 @@ OTA artifacts (`.gbl` / `.ota`) are built separately — see
 
 | Range | Size | Contents |
 |---|---|---|
-| `0x00000000 – 0x00044000` | 272 KB | Application (linker `ORIGIN=0x0`) |
-| `0x00044000 – 0x00074000` | 192 KB | OTA storage slot 0 (internal storage bootloader) |
+| `0x00000000 – 0x00040000` | 256 KB | Application (`OTA_APP_MAX_BYTES`) |
+| `0x00040000 – 0x00077000` | 220 KB | OTA storage slot 0 (internal storage bootloader) |
 | `0x00077000 – 0x00080000` | 36 KB | NVM3 (network/keys/tokens — top of main flash) |
 | `0x0FE00000` | 2 KB | User data page — manufacturing tokens (incl. the EUI64). **Preserve — never erase** |
 | `0x0FE04000` | 2 KB | Lock bits page (dumped by `./flash.sh backup`) |
 | `0x0FE10000` | 16 KB | Bootloader region (first stage + main bootloader; outside main flash) |
+
+> **The linker does not enforce the app/slot boundary.** `autogen/linkerfile.ld`
+> gives the application the whole 512 KB (`ORIGIN = 0x0, LENGTH = 0x80000`) and
+> knows nothing about the OTA slot, so an app that grows past `0x40000` links
+> cleanly and then overwrites the stored OTA image on the device. The app is at
+> 255,792 bytes with ~6.3 KB of headroom. `create_ota.py` refuses to build a
+> release image that crosses the line — that gate is the only thing catching it.
+
+The slot moved down from `0x44000` and grew into the 12 KB that used to sit
+unused before NVM3, because the image must be LZ4-compressed rather than LZMA:
+the Series-1 bootloader main stage is a fixed 14,336 bytes and LZMA's
+decompressor needs 5,144 of them, overflowing by 3,072 with nothing reclaimable
+(ECDSA cannot be removed — the GBL signature tag is compiled in unconditionally,
+and `bootloader_image_parser` hard-requires the crypto component). LZ4 costs 894
+bytes but only compresses this image to ~87 %, hence the larger slot. See
+[OTA compression](#ota-compression-lz4-not-lzma).
 
 For how to flash these regions, see [`../FLASHING.md`](../FLASHING.md).
 
@@ -303,6 +319,34 @@ mid-download every single time and one update appeared as several failed ones.
 `ota_trigger.c` now samples the OTA client's `FileOffset` attribute every
 `OTA_PROGRESS_CHECK_S` and gives up only after `OTA_STALL_CHECKS` samples with
 no movement — bounding the session by progress rather than by the clock.
+
+## OTA compression (LZ4, not LZMA)
+
+`create_ota.py` builds the GBL with `--compress lz4`, and the bootloader must
+have the **GBL Compression (LZ4)** component (`bootloader_gbl_compression_lz4`)
+to install it. These two must always match: a bootloader without the matching
+decompressor downloads the whole image and then rejects it with
+`INVALID_IMAGE` at ~99 %, because verification only runs once the download
+completes.
+
+Measured on this project (compiled `-Os` against the real config):
+
+| | flash | .bss | image ratio |
+|---|---|---|---|
+| LZMA | 5,144 B | 19,837 B | 62 % |
+| LZ4 | 894 B | 32 B | 87 % |
+
+LZMA compresses far better but does not fit: the Series-1 bootloader main stage
+is `ORIGIN = 0xfe10800, LENGTH = 0x3800` (14,336 bytes, fixed by hardware — the
+first 2 KB of the 16 KB region is the first stage). Adding LZMA overflows it by
+3,072 bytes, and the only item of that size is ECDSA+SHA (2,752), which cannot
+be removed: `GBL_TAG_ID_SIGNATURE_ECDSA_P256` is in the parser's tag table with
+no compile guard, and `bootloader_image_parser` requires
+`bootloader_aes_sha_ecdsa`. The `nonenc` parser variant saves 256 bytes and
+`bootloader_debug` saves 0 (`SL_DEBUG_PRINT`/`SL_DEBUG_ASSERT` are already 0).
+
+Because LZ4 only reaches ~87 %, the app has to stay under `OTA_APP_MAX_BYTES`
+and the slot has to be large — hence the flash map above.
 
 ### Production vs. debug build
 

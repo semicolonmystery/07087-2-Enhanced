@@ -40,9 +40,12 @@ def parse_app_config():
     minor_match = re.search(r'#define\s+FW_VERSION_MINOR\s+(\d+)', content)
     patch_match = re.search(r'#define\s+FW_VERSION_PATCH\s+(\d+)', content)
     file_ver_match = re.search(r'#define\s+FW_OTA_FILE_VERSION\s+0x([0-9a-fA-F]+)', content)
+    slot_start = re.search(r'#define\s+OTA_SLOT0_START\s+(\d+)', content)
+    slot_end = re.search(r'#define\s+OTA_SLOT0_END\s+(\d+)', content)
 
-    if not all([major_match, minor_match, patch_match, file_ver_match]):
-        print("Failed to parse version from app_config.h")
+    if not all([major_match, minor_match, patch_match, file_ver_match,
+                slot_start, slot_end]):
+        print("Failed to parse version/slot geometry from app_config.h")
         sys.exit(1)
 
     return {
@@ -50,6 +53,8 @@ def parse_app_config():
         "minor": int(minor_match.group(1)),
         "patch": int(patch_match.group(1)),
         "file_version": int(file_ver_match.group(1), 16),
+        "slot_start": int(slot_start.group(1)),
+        "slot_end": int(slot_end.group(1)),
     }
 
 
@@ -81,6 +86,51 @@ def build_ota_file(gbl_data, manufacturer_code, image_type, file_version, string
     header_data = create_ota_header(manufacturer_code, image_type, file_version,
                                     string_id, total_size)
     return header_data + tag_data
+
+
+def flashed_size(path):
+    """Highest flash address touched by a build file.
+
+    Handles Motorola S-records (S1/S2/S3 - Studio emits S2 for this part, with
+    24-bit addresses) and Intel HEX (record 00 data, 02 extended segment,
+    04 extended linear). Getting the record type wrong here would silently
+    report 0 and let an oversized app through the gate below, so the parser
+    must fail loudly rather than return a small number.
+    """
+    top = 0
+    seen_data = False
+    base = 0
+    with open(path, "r", encoding="ascii", errors="ignore") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            if line[0] == "S" and len(line) > 4:
+                kind = line[1]
+                if kind not in "123":
+                    continue                      # S0 header, S7/S8/S9 term
+                addr_len = {"1": 4, "2": 6, "3": 8}[kind]
+                count = int(line[2:4], 16)
+                addr = int(line[4:4 + addr_len], 16)
+                nbytes = count - (addr_len // 2) - 1
+                if nbytes > 0:
+                    top = max(top, addr + nbytes)
+                    seen_data = True
+            elif line[0] == ":" and len(line) >= 11:
+                count = int(line[1:3], 16)
+                addr = int(line[3:7], 16)
+                rectype = int(line[7:9], 16)
+                if rectype == 0x00:
+                    top = max(top, base + addr + count)
+                    seen_data = True
+                elif rectype == 0x02:             # extended segment address
+                    base = int(line[9:13], 16) << 4
+                elif rectype == 0x04:             # extended linear address
+                    base = int(line[9:13], 16) << 16
+    if not seen_data:
+        sys.exit("could not parse any data records from %s - refusing to "
+                 "release without a verified app size" % path)
+    return top
 
 
 def emit_outputs(**kwargs):
@@ -126,7 +176,7 @@ def main():
     print(f"Processing {build_file.name}...")
     res = subprocess.run(
         ["commander", "gbl", "create", str(gbl_path),
-         "--app", str(build_file), "--compress", "lzma"],
+         "--app", str(build_file), "--compress", "lz4"],
         capture_output=True, text=True)
     if res.returncode != 0:
         print(f"Commander failed:\n{res.stderr}\n{res.stdout}")
@@ -142,6 +192,26 @@ def main():
     out_path.write_bytes(ota_data)
     print(f"Created {out_name} ({len(ota_data)} bytes)")
     gbl_path.unlink()
+
+    # Two hard gates. Neither failure mode is caught anywhere else:
+    #
+    #  1. autogen/linkerfile.ld gives the app the whole 512 KB (ORIGIN 0x0,
+    #     LENGTH 0x80000) and knows nothing about the OTA slot, so an app that
+    #     grows past OTA_SLOT0_START links cleanly and then overwrites the slot
+    #     on the device.
+    #  2. The image must fit the slot, or the download dies near the end.
+    slot_start, slot_end = ver["slot_start"], ver["slot_end"]
+    slot_size = slot_end - slot_start
+    app_bytes = flashed_size(build_file)
+    print(f"app image {app_bytes} B vs slot start {slot_start} "
+          f"(0x{slot_start:X}); .ota {len(ota_data)} B vs slot {slot_size} B")
+    if app_bytes > slot_start:
+        sys.exit(f"REFUSING: app is {app_bytes} bytes and would run past the OTA "
+                 f"slot start at {slot_start} (0x{slot_start:X}) by "
+                 f"{app_bytes - slot_start} bytes. The linker does NOT catch this.")
+    if len(ota_data) > slot_size:
+        sys.exit(f"REFUSING: .ota is {len(ota_data)} bytes but slot 0 holds only "
+                 f"{slot_size}. Over by {len(ota_data) - slot_size}.")
 
     # Publish the wired-flash image under the same versioned name as the .ota.
     hex_name = ""

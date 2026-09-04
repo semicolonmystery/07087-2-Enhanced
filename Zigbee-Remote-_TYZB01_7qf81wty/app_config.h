@@ -188,8 +188,28 @@
 // Ground truth from the bootloader project (btl_storage_slot_cfg.h): OTA
 // storage slot 0. NOT tunables — change ONLY together with the bootloader.
 // Cross-checked against ota-storage-simple-eeprom-config.h by #if in app.c.
-#define OTA_SLOT0_START             278528  // 0x44000 (absolute flash address)
-#define OTA_SLOT0_END               475136  // 0x74000 = start + 196608 (192 KB)
+#define OTA_SLOT0_START             262144  // 0x40000 (absolute flash address)
+#define OTA_SLOT0_END               487424  // 0x77000 = start + 225280 (220 KB)
+
+// Flash map, and why the slot moved (v1.0.15):
+//   app   0x00000..0x40000  256 KB   OTA_APP_MAX_BYTES below
+//   slot  0x40000..0x77000  220 KB   this slot
+//   NVM3  0x77000..0x80000   36 KB   network keys, bindings, tokens
+//
+// The image has to be compressed to fit the slot at all, and the Gecko
+// bootloader can only decompress what its parser was built with. LZMA needs
+// 5144 bytes of bootloader flash and the Series-1 main stage has only 14336
+// total, so it overflowed by 3072 with nothing left to reclaim (ECDSA cannot
+// be removed — the signature tag is compiled in unconditionally). LZ4 costs
+// 894 bytes and fits, but only compresses this image to ~87 %, so the slot had
+// to grow: start moved down 0x44000 -> 0x40000 and the end into the 12 KB that
+// was sitting unused between the old slot and NVM3.
+//
+// THE APP LINKER DOES NOT ENFORCE THIS. autogen/linkerfile.ld hands the app all
+// 512 KB (ORIGIN 0x0, LENGTH 0x80000), so an app that grows past OTA_SLOT0_START
+// silently overwrites the OTA slot instead of failing to link. create_ota.py
+// refuses to build a release image that crosses the line; keep it that way.
+#define OTA_APP_MAX_BYTES           OTA_SLOT0_START
 
 // ---------------------------------------------------------------------------
 // Radio
@@ -202,16 +222,16 @@
 // ---- Human-readable version. Bump all four together for a release. --------
 #define FW_VERSION_MAJOR            1
 #define FW_VERSION_MINOR            0
-#define FW_VERSION_PATCH            14
-#define FW_VERSION_STRING           "1.0.14"   // -> Basic SW Build ID (0x4000)
-#define FW_DATE_CODE                "20260903" // -> Basic DateCode (0x0006), YYYYMMDD
+#define FW_VERSION_PATCH            15
+#define FW_VERSION_STRING           "1.0.15"   // -> Basic SW Build ID (0x4000)
+#define FW_DATE_CODE                "20260904" // -> Basic DateCode (0x0006), YYYYMMDD
 
 // Flat build counter. MUST increase on EVERY released image — it is the only
 // field that makes FW_OTA_FILE_VERSION grow, and an OTA is offered only when
 // the file version is strictly greater than the running one. It is deliberately
 // NOT derived from major/minor/patch: a single byte cannot encode all three
 // without collisions (1.0.10 and 1.1.0 would tie).
-#define FW_BUILD                    14
+#define FW_BUILD                    15
 
 // EmberZNet version this image is built against (GSDK 4.4.6 = EmberZNet 7.4.x).
 #define FW_STACK_REL                7
@@ -232,7 +252,7 @@
 // Kept as a plain hex literal on purpose: .github/scripts/create_ota.py parses
 // it with the regex `FW_OTA_FILE_VERSION\s+0x([0-9a-fA-F]+)` and would fail on
 // an expression. The #if below is what keeps the literal honest.
-#define FW_OTA_FILE_VERSION         0x010E0704UL
+#define FW_OTA_FILE_VERSION         0x010F0704UL
 
 #if FW_OTA_FILE_VERSION != (((FW_VERSION_MAJOR) << 24) | ((FW_BUILD) << 16) \
                             | ((FW_STACK_REL) << 8) | (FW_STACK_BUILD))

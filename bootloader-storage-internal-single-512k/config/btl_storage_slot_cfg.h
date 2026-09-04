@@ -37,11 +37,11 @@
 
 // <o SLOT0_START> Start Address
 // <f .h>
-#define SLOT0_START   278528
+#define SLOT0_START   262144
 
 // <o SLOT0_SIZE> Slot Size
 // <f .h>
-#define SLOT0_SIZE 196608
+#define SLOT0_SIZE 225280
 
 // <e SLOT1_ENABLE> Enable Slot 1
 // <i> Default: 0
