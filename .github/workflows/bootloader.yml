@@ -1,0 +1,116 @@
+name: Build bootloader
+
+# Automatically rebuilds the bootloader from source whenever the bootloader
+# project or the shared CLI-build tooling changes, and keeps
+# bin/bootloader-combined.s37 (the tracked distribution copy, see
+# docs/BUILD.md) in sync with it. This never flashes anything — the
+# bootloader always needs a manual SWD reflash afterward regardless of how
+# it was built (see FLASHING.md) — it just makes sure the committed combined
+# image always matches source.
+#
+# UNVERIFIED STEP: the "combine first-stage + main-stage into one flashable
+# image" step below uses `commander convert` to merge the two non-overlapping
+# S-record images, which is Commander's standard way to merge images at
+# different fixed addresses. This reproduces what Studio's own post-build
+# profile (bootloader-storage-internal-single-512k.slpb, profile
+# bootloader_series_1) does, but that profile's exact invocation wasn't
+# available to construct this from — verify the first real run of this
+# workflow produces a combined image that matches bin/bootloader-combined.s37
+# in size/behavior before trusting it over a Studio-built one.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bootloader-storage-internal-single-512k/**'
+      - 'tools/slc-*.sh'
+      - '.github/scripts/check_slot_geometry.py'
+      - '.github/workflows/bootloader.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build-bootloader:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Slot geometry vs app_config.h (fast, no toolchain needed)
+        run: python .github/scripts/check_slot_geometry.py
+
+      - name: Cache slc-cli / toolchain / gecko_sdk
+        uses: actions/cache@v4
+        with:
+          path: tools/.cache
+          key: slc-tools-${{ hashFiles('tools/slc-install.sh') }}
+
+      - name: Install slc-cli + toolchain + SDK
+        run: tools/slc-install.sh
+
+      - name: Build the bootloader
+        run: tools/slc-build.sh bootloader-storage-internal-single-512k EFR32MG13P732F512GM48 build/bootloader
+
+      - name: Slot geometry vs what slc actually generated
+        run: |
+          python .github/scripts/check_slot_geometry.py \
+            --generated-config build/bootloader/config/btl_storage_slot_cfg.h
+
+      - name: Cache Simplicity Commander
+        id: cache-commander
+        uses: actions/cache@v4
+        with:
+          path: commander
+          key: simplicity-commander-linux-2024
+
+      - name: Download Simplicity Commander
+        if: steps.cache-commander.outputs.cache-hit != 'true'
+        run: |
+          wget -q -O commander.zip https://www.silabs.com/documents/login/software/SimplicityCommander-Linux.zip
+          unzip -q commander.zip -d commander_zip
+          tar -xf commander_zip/SimplicityCommander-Linux/Commander_linux_x86_64_*.tar.bz* -C .
+          rm -rf commander_zip commander.zip
+
+      - name: Combine first-stage + main-stage into one flashable image
+        run: |
+          echo "${GITHUB_WORKSPACE}/commander" >> "$GITHUB_PATH"
+          export PATH="${GITHUB_WORKSPACE}/commander:$PATH"
+          FIRST_STAGE="build/bootloader/autogen/first_stage.s37"
+          MAIN_STAGE="$(find build/bootloader/artifacts -maxdepth 1 -iname '*.s37' | head -1)"
+          if [[ ! -f "$FIRST_STAGE" ]]; then
+            echo "!! $FIRST_STAGE not found — slc generate may lay out autogen/ differently than expected." >&2
+            find build/bootloader -maxdepth 2 >&2
+            exit 1
+          fi
+          if [[ -z "$MAIN_STAGE" ]]; then
+            echo "!! no main-stage .s37 found in build/bootloader/artifacts" >&2
+            exit 1
+          fi
+          mkdir -p bootloader-storage-internal-single-512k/artifact
+          commander convert "$FIRST_STAGE" "$MAIN_STAGE" \
+            -o bootloader-storage-internal-single-512k/artifact/bootloader-storage-internal-single-512k-combined.s37
+
+      - name: Update the tracked distribution copy if changed
+        run: |
+          cp bootloader-storage-internal-single-512k/artifact/bootloader-storage-internal-single-512k-combined.s37 \
+             bin/bootloader-combined.s37
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bin/bootloader-combined.s37
+          if git diff --cached --quiet; then
+            echo "bin/bootloader-combined.s37 unchanged."
+          else
+            git commit -m "bootloader: rebuild from source [skip ci]"
+            git push
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bootloader-combined
+          path: bin/bootloader-combined.s37
+          if-no-files-found: error

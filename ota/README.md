@@ -60,67 +60,79 @@ To release a new OTA image for the remote, the `fileVersion` must be strictly gr
 
 **To publish a new version:**
 
-1. Bump the version block in `app_config.h`. Since v1.0.11 the OTA file version
-   follows the layout the Zigbee OTA spec actually defines —
-   `app-release . app-build . stack-release . stack-build` — instead of
-   `major.minor.patch.build`. (Under the old scheme the patch number sat in the
-   *stack release* byte, so every release showed up in Z2M as an unchanged
-   application with a moving "stack version": 0.5, 0.8, 0.10 …)
+1. Push a version tag from the current tip of `main`:
 
-   ```c
-   #define FW_VERSION_PATCH      12
-   #define FW_VERSION_STRING     "1.0.12"   // -> Basic SW Build ID
-   #define FW_DATE_CODE          "20260915" // -> Basic DateCode, YYYYMMDD
-   #define FW_BUILD              12         // MUST increase every release
-   #define FW_OTA_FILE_VERSION   0x010C0704UL
-   //                              ^^ ^^ ^^^^
-   //                              |  |  └── stack 7.4 (EmberZNet, unchanged)
-   //                              |  └───── FW_BUILD (12 = 0x0C)
-   //                              └──────── FW_VERSION_MAJOR
+   ```sh
+   git tag v1.0.16
+   git push origin v1.0.16
    ```
 
-   `FW_BUILD` is a flat counter, deliberately not derived from
-   major/minor/patch — one byte cannot hold all three without collisions
-   (1.0.10 and 1.1.0 would tie). It is the only field that makes the file
-   version grow, and an OTA is offered only when the file version is strictly
-   greater than the running one.
+   That's the whole manual part. `.github/workflows/release.yml` takes over
+   from there — you do **not** hand-edit `app_config.h`'s version fields or
+   build anything locally for a normal release.
 
-   You do not have to compute `FW_OTA_FILE_VERSION` carefully by hand: `#if`
-   checks in `app_config.h` fail the build if the literal disagrees with
-   `MAJOR`/`FW_BUILD`/`FW_STACK_*`, or if it is not above the last version
-   published under the old scheme (`0x01000A00`, v1.0.10). It is kept as a
-   literal rather than an expression because `create_ota.py` parses it with the
-   regex `FW_OTA_FILE_VERSION\s+0x([0-9a-fA-F]+)`.
+**What the release workflow does (`.github/workflows/release.yml`):**
+
+1. **Bumps the version.** `.github/scripts/bump_version.py` parses
+   `MAJOR.MINOR.PATCH` from the tag and updates `app_config.h`'s
+   `FW_VERSION_MAJOR/MINOR/PATCH`, `FW_VERSION_STRING`, and `FW_DATE_CODE` —
+   plus, since v1.0.11, the OTA file version follows the layout the Zigbee
+   OTA spec actually defines, `app-release . app-build . stack-release .
+   stack-build`, rather than `major.minor.patch.build` (under the old scheme
+   the patch number sat in the *stack release* byte, so every release showed
+   up in Z2M as an unchanged application with a moving "stack version": 0.5,
+   0.8, 0.10 …). `FW_BUILD` — the flat build counter that actually makes the
+   file version grow — is read from the current file and incremented by 1,
+   **not** derived from the tag's patch number: one byte can't hold
+   major/minor/patch without collisions (1.0.10 and 1.1.0 would tie), and
+   deriving it from PATCH would reset it to 0 on the next minor/major bump.
+   `FW_OTA_FILE_VERSION` is recomputed from `MAJOR`/`FW_BUILD`/`FW_STACK_*`
+   and written as the hex literal `create_ota.py` parses with the regex
+   `FW_OTA_FILE_VERSION\s+0x([0-9a-fA-F]+)`. The same value is also written
+   into `config/ota-client-policy-config.h`'s
+   `EMBER_AF_PLUGIN_OTA_CLIENT_POLICY_FIRMWARE_VERSION` — `app.c` has a
+   compile-time `#if` that fails the build if these two ever disagree. Both
+   invariants `app_config.h`'s own `#if` guards enforce (new value strictly
+   greater than the current one; new value above the last version published
+   under the old scheme, `0x01000A00` = v1.0.10) are re-checked here too, so
+   a bad bump fails in CI with a clear message rather than as a compile
+   error three steps later.
 
    The Basic cluster attributes (SW Build ID, DateCode, ApplicationVersion,
-   StackVersion) are written at boot from these constants by `app.c`, so there
-   is nothing to update in the ZCL editor for a release.
+   StackVersion) are written at boot from these constants by `app.c`, so
+   there is nothing to update in the ZCL editor for a release.
 
-2. Make sure you also update `config/ota-client-policy-config.h` (or via Studio GUI) to match — e.g. `0x010C0704`. A `#if` in `app.c` fails the build if the two disagree.
-3. Build the project in Simplicity Studio to get the `.s37` (or `.hex` / `.bin`) file.
-4. Copy the compiled `.s37` file into this `ota/` directory.
-5. `git add`, `commit`, and `push` the `.s37` file to the `main` branch.
+2. **Commits the bump and moves the tag.** The version-bump commit goes to
+   `main`, and the tag is force-moved to point at it — so the tag, the
+   released binary, and the committed source always agree.
+3. **Builds the app from source.** `tools/slc-install.sh` +
+   `tools/slc-build.sh` compile the bumped commit headlessly with `slc-cli`
+   — see [`../docs/BUILD.md`](../docs/BUILD.md)'s "CI / CLI build" section.
+   Studio is not involved.
+4. Everything from here on is unchanged from before:
+   - Simplicity Commander compresses the build into an **LZ4** `.gbl` (LZMA
+     doesn't fit — see [`../docs/BUILD.md`](../docs/BUILD.md)'s "OTA
+     compression" section for why);
+   - wraps that in the 56-byte Zigbee OTA header, producing
+     `TS1001_TYZB01_7qf81wty_Enhanced-v<MAJOR>.<MINOR>.<PATCH>.ota`;
+   - two hard gates refuse the release if it doesn't actually fit flash: the
+     uncompressed app image must not run past the OTA slot's start address,
+     and the compressed `.ota` must not exceed the slot's size;
+   - builds a single-entry `index.json` whose fields are read back out of the
+     `.ota`'s own header, so the index can never disagree with the image;
+   - publishes both as assets of a **GitHub Release** tagged `v<MAJOR>.<MINOR>.<PATCH>`
+     (re-runs update the existing release rather than failing);
+   - downloads the published assets again and verifies magic, size, sha512,
+     fileVersion and manufacturer/image type before finishing.
 
-**Automated GitHub Action**
-When you push the raw `.s37` file to `main`, a GitHub Action automatically:
-- uses Simplicity Commander to compress it into an LZMA `.gbl`;
-- wraps that in the 56-byte Zigbee OTA header, producing
-  `TS1001_TYZB01_7qf81wty_Enhanced-v<MAJOR>.<MINOR>.<PATCH>.ota`;
-- builds a single-entry `index.json` whose fields are read back out of the
-  `.ota`'s own header, so the index can never disagree with the image;
-- publishes both as assets of a **GitHub Release** tagged `v<MAJOR>.<MINOR>.<PATCH>`
-  (re-runs update the existing release rather than failing);
-- downloads the published assets again and verifies magic, size, sha512,
-  fileVersion and manufacturer/image type before finishing;
-- deletes your raw `.s37` from the repo.
-
-Firmware binaries are **never committed to the repo** any more — `ota/` holds
-this README and nothing else. Everything is served from Release assets, which is
-what makes a new version visible to Z2M immediately.
+Firmware binaries are **never committed to the repo** — `ota/` is only ever a
+transient staging spot inside the CI run. Everything is served from Release
+assets, which is what makes a new version visible to Z2M immediately.
 
 **Local Build Alternative**
-To produce the `.ota` locally without CI, drop the `.s37` into `ota/` and run the
-provided Docker image from the repo root:
+To produce the `.ota` locally without CI, drop a `.s37` into `ota/` — from
+`../build.sh` (headless `slc-cli` build, no Studio) or from Studio directly —
+and run the provided Docker image from the repo root:
 1. `docker build -t ota-builder tools/ota-builder`
 2. `docker run --rm -v ${PWD}:/repo ota-builder`
 

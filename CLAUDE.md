@@ -18,12 +18,15 @@ tooling, and incremental firmware changes rather than a from-scratch build.
 Zigbee-Remote-_TYZB01_7qf81wty/          Simplicity Studio application project
 bootloader-storage-internal-single-512k/ Simplicity Studio bootloader project
 flash.sh, debug.sh, fetch.sh, efr32.cfg  Pi CM4 + OpenOCD workflow (repo root, so a clone is usable as-is)
-bin/                                     bootloader-combined.s37 — static, flashed once
+bin/                                     bootloader-combined.s37 — auto-rebuilt by .github/workflows/bootloader.yml
+Dockerfile, build.sh                     Local headless build (slc-cli, no Studio) — mirrors CI exactly
+tools/slc-install.sh, slc-build.sh       Fetch slc-cli/toolchain/SDK; generate+compile a project headlessly
 tools/ota-builder/                       Dockerfile for building the .ota locally
 docs/                                    BUILD.md, api-reference.md, images/
-ota/                                     OTA release guide (artifacts go to GitHub Releases, not the repo)
+ota/                                     Ephemeral drop-zone for a freshly-built .s37/.hex feeding create_ota.py
 z2m/                                     Zigbee2MQTT external converter (ts1001-tyzb01-enhanced.js)
-.github/                                 CI: turns a pushed .s37/.hex into a GitHub Release (.ota + .hex + index.json)
+.github/                                 CI: builds both projects from source; ci.yml verifies, release.yml
+                                          (tag push) bumps version + releases, bootloader.yml auto-rebuilds bin/
 ```
 
 The two Simplicity Studio project directories are managed by Studio itself —
@@ -32,20 +35,35 @@ see the build workflow below before editing anything inside them.
 ## Build workflow
 
 The project builds in **Simplicity Studio v5** against **Gecko SDK 4.4.6**
-(EmberZNet 7.4.x) with the **GNU ARM 12.2.1** toolchain. There is no
-command-line build — an agent working in this repository cannot build the
-firmware; changes need to be verified by building in Studio.
+(EmberZNet 7.4.x) with the **GNU ARM 12.2.1** toolchain. It also builds
+headlessly with `slc-cli`: `tools/slc-install.sh` fetches `slc-cli`, the ARM
+toolchain, and the pinned Gecko SDK 4.4.6 revision; `tools/slc-build.sh
+<project-dir> <part-id> <out-dir>` generates and compiles a project from its
+`.slcp`, the same way Studio does. Both projects build this way in CI
+(`.github/workflows/ci.yml`, `bootloader.yml`, `release.yml`) on every
+relevant push, and `./build.sh` runs the identical steps locally in Docker.
+An agent working in this repository **can** build and verify a firmware
+change this way — Studio is no longer required just to prove a change
+compiles. See [docs/BUILD.md](docs/BUILD.md)'s "CI / CLI build" section for
+details.
 
-Two workspace rules matter here:
+Three workspace rules matter here:
 
 - **Component changes go through Studio's GUI.** Installing or uninstalling
   a software component (`.slcp`) or editing Zigbee clusters (`.zap`) must be
   done through Studio's Software Components UI, not by hand-editing the
   files on disk. Studio's `.pdm` cache regenerates the `.slcp` from its own
-  state and will silently revert on-disk edits.
+  state and will silently revert on-disk edits. This protects the local
+  Studio workspace, not CI: `slc generate` reads whatever `.slcp` is checked
+  in regardless of how it got that way.
 - **Source and config files are safe to edit directly.** `*.c` / `*.h` in
   the project root, and everything under `config/*.h`, persist normally and
-  are picked up by the next Studio build.
+  are picked up by the next Studio build (and by `slc-build.sh`).
+- **The OTA slot geometry must agree across `app_config.h`, the
+  bootloader's `.slcp`, and its generated `config/btl_storage_slot_cfg.h`.**
+  These drifted once already (see `docs/BUILD.md`'s flash memory map).
+  `.github/scripts/check_slot_geometry.py` is a standing CI check for this —
+  run it locally after touching either project's slot configuration.
 
 Build artifacts, the flash memory map, and the full `app_config.h` tuning
 reference live in [docs/BUILD.md](docs/BUILD.md). Flashing and debugging

@@ -22,6 +22,8 @@ dist/
 /backups/
 # Firmware downloaded by ./fetch.sh
 /build/
+# slc-cli, ARM toolchain, and gecko_sdk fetched by tools/slc-install.sh
+tools/.cache/
 # Studio bootloader build output; the distributed copy is bin/bootloader-combined.s37
 bootloader-storage-internal-single-512k/artifact/
 __pycache__/

@@ -2,7 +2,7 @@
 project_name: bootloader-storage-internal-single-512k
 label: bootloader-storage-internal-single-512k
 description: |
-  This sample configuration of the Gecko bootloader configures the bootloader to use the internal main flash to store firmware update images. The storage configuration is set up to store a single firmware update image at a time, in a single storage slot. The storage slot is configured to start at address 0x44000 (or 0x8044000 for device with 0x8000000 flash base), and have a size of 192 kB. This can be configured on the "Storage" tab.
+  This sample configuration of the Gecko bootloader configures the bootloader to use the internal main flash to store firmware update images. The storage configuration is set up to store a single firmware update image at a time, in a single storage slot. The storage slot is configured to start at address 0x40000 (or 0x8040000 for device with 0x8000000 flash base), and have a size of 220 kB. This can be configured on the "Storage" tab.
 category: Example|Bootloader
 filter:
 - name: Device Type
@@ -32,25 +32,25 @@ component:
 - {id: bootloader_token_management}
 configuration:
 - {name: SLOT0_ENABLE, value: '1'}
-- {name: SLOT0_SIZE, value: '196608'}
+- {name: SLOT0_SIZE, value: '225280'}
 - condition: [device_series_1]
   name: BTL_STORAGE_BASE_ADDRESS
-  value: '278528'
+  value: '262144'
 - condition: [device_series_1]
   name: SLOT0_START
-  value: '278528'
+  value: '262144'
 - condition: [device_sdid_200]
   name: BTL_STORAGE_BASE_ADDRESS
-  value: '278528'
+  value: '262144'
 - condition: [device_sdid_200]
   name: SLOT0_START
-  value: '278528'
+  value: '262144'
 - condition: [device_sdid_205]
   name: BTL_STORAGE_BASE_ADDRESS
-  value: '278528'
+  value: '262144'
 - condition: [device_sdid_205]
   name: SLOT0_START
-  value: '278528'
+  value: '262144'
 - condition: [device_sdid_210]
   name: BTL_STORAGE_BASE_ADDRESS
   value: '134496256'

@@ -1,0 +1,91 @@
+name: CI (build from source)
+
+# Fast, automatic proof that a change still compiles — no release, no
+# commits. Runs both projects unconditionally whenever anything that could
+# affect either one changes, using the same tools/slc-install.sh +
+# tools/slc-build.sh an agent or a human would run locally (see build.sh).
+#
+# The slot-geometry guardrail runs first and separately, and needs neither
+# slc-cli nor a build: it's a pure source-file cross-check (see
+# .github/scripts/check_slot_geometry.py) for the exact kind of drift that
+# shipped a broken OTA slot once before (pre-v1.0.15).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Zigbee-Remote-_TYZB01_7qf81wty/**'
+      - 'bootloader-storage-internal-single-512k/**'
+      - 'tools/slc-*.sh'
+      - '.github/scripts/check_slot_geometry.py'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    paths:
+      - 'Zigbee-Remote-_TYZB01_7qf81wty/**'
+      - 'bootloader-storage-internal-single-512k/**'
+      - 'tools/slc-*.sh'
+      - '.github/scripts/check_slot_geometry.py'
+      - '.github/workflows/ci.yml'
+
+jobs:
+  slot-geometry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python .github/scripts/check_slot_geometry.py
+
+  build-app:
+    needs: slot-geometry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache slc-cli / toolchain / gecko_sdk
+        uses: actions/cache@v4
+        with:
+          path: tools/.cache
+          key: slc-tools-${{ hashFiles('tools/slc-install.sh') }}
+
+      - name: Install slc-cli + toolchain + SDK
+        run: tools/slc-install.sh
+
+      - name: Build the app
+        run: tools/slc-build.sh Zigbee-Remote-_TYZB01_7qf81wty EFR32MG13P732F512GM48 build/app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-build
+          path: build/app/artifacts/*
+          if-no-files-found: error
+
+  build-bootloader:
+    needs: slot-geometry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache slc-cli / toolchain / gecko_sdk
+        uses: actions/cache@v4
+        with:
+          path: tools/.cache
+          key: slc-tools-${{ hashFiles('tools/slc-install.sh') }}
+
+      - name: Install slc-cli + toolchain + SDK
+        run: tools/slc-install.sh
+
+      - name: Build the bootloader
+        run: tools/slc-build.sh bootloader-storage-internal-single-512k EFR32MG13P732F512GM48 build/bootloader
+
+      - name: Re-check slot geometry against what slc actually generated
+        run: |
+          python .github/scripts/check_slot_geometry.py \
+            --generated-config build/bootloader/config/btl_storage_slot_cfg.h
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bootloader-build
+          path: build/bootloader/artifacts/*
+          if-no-files-found: error

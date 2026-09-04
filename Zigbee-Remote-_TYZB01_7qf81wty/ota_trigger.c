@@ -31,7 +31,7 @@
  * Manager present it boots storage slot 0 via emberAfPluginSlotManagerBootSlot
  * -> bootloader_setImagesToBootload + bootloader_rebootAndInstall. The
  * internal-storage Gecko bootloader then verifies the GBL in slot 0
- * (0x44000..0x74000) and installs it over the app area. Image verification
+ * (0x40000..0x77000) and installs it over the app area. Image verification
  * BEFORE the reboot is the policy's EBL verification (EBL_VERIFICATION=1),
  * which runs bootloader_initVerifyImage/continueVerifyImage through the Slot
  * Manager (ota-client-policy.c:115-144, slot-manager.c) — this is why the

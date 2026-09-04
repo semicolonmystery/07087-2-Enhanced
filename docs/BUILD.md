@@ -37,8 +37,10 @@ Zigbee-Remote-_TYZB01_7qf81wty/GNU ARM v12.2.1 - Default/Zigbee-Remote-_TYZB01_7
 ```
 
 Bootloader (build once; the post-build step writes into `artifact/`, which is
-gitignored — the distributed copy is committed at `bin/bootloader-combined.s37`,
-so re-copy it there if you ever rebuild the bootloader):
+gitignored — the distributed copy is committed at `bin/bootloader-combined.s37`.
+Re-copying it there is automatic if you rebuild via `.github/workflows/bootloader.yml`
+or `./build.sh bootloader-storage-internal-single-512k`; do it by hand if you
+rebuild in Studio instead):
 
 ```
 bootloader-storage-internal-single-512k/artifact/bootloader-storage-internal-single-512k-combined.s37   <-- flash this one
@@ -56,6 +58,46 @@ The flashing scripts live at the repo root (`flash.sh`, `debug.sh`, `fetch.sh`,
 
 OTA artifacts (`.gbl` / `.ota`) are built separately — see
 [`../ota/README.md`](../ota/README.md).
+
+## CI / CLI build
+
+The project also builds headlessly, without Studio, using Silicon Labs'
+`slc-cli` (installed via `slt`, Silicon Labs' unauthenticated CLI installer):
+
+- **`tools/slc-install.sh`** fetches `slc-cli` and the GNU ARM 12.2.1
+  toolchain via `slt install --non-interactive`, and clones
+  `SiliconLabs/gecko_sdk` at tag `v4.4.6` directly from GitHub — this project
+  is pinned to the older Gecko SDK line, not the newer Conan-based
+  "Simplicity SDK" that `slt install simplicity-sdk` would otherwise fetch.
+  Everything lands under `tools/.cache/` (gitignored, cached across runs).
+- **`tools/slc-build.sh <project-dir> <part-id> <out-dir>`** runs
+  `slc generate` against the project's `.slcp` and then `make`s the result —
+  the same thing Studio's hammer-icon build does. Artifacts land in
+  `<out-dir>/artifacts/`.
+- **`./build.sh [project-dir] [part-id]`** runs both of the above inside a
+  Docker container (`Dockerfile` at the repo root) for a local build that
+  matches CI exactly, without installing Studio.
+
+CI runs this on every relevant push:
+
+- **`ci.yml`** — builds both projects on every push/PR touching source,
+  config, or `.slcp` files. Compile-only, no release: this is what proves a
+  change still builds without anyone opening Studio.
+- **`bootloader.yml`** — auto-rebuilds the bootloader whenever its project
+  changes, and keeps `bin/bootloader-combined.s37` in sync. Still requires a
+  manual SWD reflash afterward — see [`../FLASHING.md`](../FLASHING.md).
+- **`release.yml`** — triggered by pushing a tag `vMAJOR.MINOR.PATCH`. Bumps
+  every version field in `app_config.h` to match (see
+  [Versioning](#versioning)), commits that and moves the tag to point at it,
+  builds the app from source, and publishes exactly like the old
+  `build-ota.yml` did — `create_ota.py`'s existing fit gates (app vs. the OTA
+  slot start, compressed `.ota` vs. the slot size) are unchanged, and are
+  what actually prove the release fits flash, not this workflow.
+
+`.github/scripts/check_slot_geometry.py` is a standing guardrail run in all
+three workflows: it fails the build if `app_config.h`'s `OTA_SLOT0_START/END`
+and the bootloader's slot configuration ever disagree again — see the flash
+memory map below for why that matters.
 
 ## Flash memory map (EFR32MG13P732F512GM48, 512 KB)
 
@@ -134,13 +176,13 @@ tells you where.
 | `OTA_PROGRESS_CHECK_S` | s | 60 | Stall watchdog: how often the OTA FileOffset is sampled |
 | `OTA_STALL_CHECKS` | – | 3 | Samples with no progress before a session is aborted (~180 s) |
 | `OTA_QUERY_GRACE_S` | s | 30 | Idle-session early end (query answered "no image") |
-| `OTA_SLOT0_START/END` | addr | 0x44000/0x74000 | Flash-map ground truth (change only with the bootloader!) |
+| `OTA_SLOT0_START/END` | addr | 0x40000/0x77000 | Flash-map ground truth (change only with the bootloader!) |
 | `TX_POWER_DBM` | dBm | 10 | Radio TX power (mirrored in RAIL/steering configs) |
-| `FW_VERSION_STRING` | – | "1.0.14" | Written to Basic SW Build ID (0x4000) at boot by `app.c` |
-| `FW_DATE_CODE` | – | "20260903" | Written to Basic DateCode (0x0006) at boot, `YYYYMMDD` |
-| `FW_BUILD` | – | 14 | Flat build counter; **must increase every release** — see [Versioning](#versioning) |
+| `FW_VERSION_STRING` | – | "1.0.15" | Written to Basic SW Build ID (0x4000) at boot by `app.c` |
+| `FW_DATE_CODE` | – | "20260904" | Written to Basic DateCode (0x0006) at boot, `YYYYMMDD` |
+| `FW_BUILD` | – | 15 | Flat build counter; **must increase every release** — see [Versioning](#versioning) |
 | `FW_STACK_REL` / `FW_STACK_BUILD` | – | 7 / 4 | EmberZNet version reported in the OTA file version and Basic StackVersion |
-| `FW_OTA_FILE_VERSION` | – | 0x010E0704 | OTA image version, `app-release.app-build.stack-release.stack-build` — bump together with the `ota-client-policy-config.h` firmware version for every release (both `#if`-guarded) |
+| `FW_OTA_FILE_VERSION` | – | 0x010F0704 | OTA image version, `app-release.app-build.stack-release.stack-build` — bump together with the `ota-client-policy-config.h` firmware version for every release (both `#if`-guarded) |
 | `DEBUG_UART_ENABLED` | bool | 0 | Reserved; UART debug on PA0/TXD |
 | `DEBUG_LOGGING` | bool | 0 | Master switch for this firmware's own RTT/console logs. 0 = production (all log calls compiled out — silent, zero cost). Set to 1 (and keep `iostream_rtt` + `zigbee_debug_print`) to restore logs |
 
@@ -366,9 +408,12 @@ Zigbee-Remote-_TYZB01_7qf81wty/   application project (app.c, buttons.c,
                                   led_effects.c, remote_zigbee.c, battery.c,
                                   action_cache.c, ota_trigger.c, app_config.h)
 bootloader-storage-internal-single-512k/   Gecko bootloader project
-tools/                             flash.sh / debug.sh / efr32.cfg (Pi CM4 + OpenOCD)
+flash.sh, debug.sh, fetch.sh, efr32.cfg   Pi CM4 + OpenOCD workflow (repo root)
+Dockerfile, build.sh               local headless build (slc-cli, no Studio)
+tools/slc-install.sh, slc-build.sh Fetch slc-cli/toolchain/SDK; generate+build a project
+tools/ota-builder/                 Dockerfile for building the .ota locally
 z2m/ts1001-tyzb01-enhanced.js                  Zigbee2MQTT external converter
-ota/                                OTA image build guide + hosted index
+ota/                                Ephemeral drop-zone for a freshly-built .s37/.hex
 docs/api-reference.md              verified SDK API signatures
 docs/BUILD.md                      this file
 ```

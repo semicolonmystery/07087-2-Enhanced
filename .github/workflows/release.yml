@@ -1,27 +1,26 @@
-name: Build OTA and Publish Release
+name: Release (build from source + publish)
 
-# Push the Studio build output (ota/*.s37) to main and this workflow turns it
-# into a Zigbee OTA image, publishes it as a GitHub Release, and attaches the
-# Zigbee2MQTT index alongside it.
+# Triggered by pushing a version tag (vMAJOR.MINOR.PATCH) at the current tip
+# of main. This workflow:
+#   1. Bumps every version field in app_config.h to match the tag, commits
+#      that to main, and moves the tag to point at the new commit — so the
+#      tag, the released binary, and the committed source always agree.
+#   2. Builds the app from source with slc-cli (tools/slc-install.sh +
+#      tools/slc-build.sh) instead of requiring a Studio-built binary pushed
+#      into ota/.
+#   3. Reuses create_ota.py / build_ota_index.py exactly as before — they
+#      only care that a .s37/.hex sit in ota/, not how they got there. Their
+#      existing gates (app doesn't overrun the OTA slot; the compressed .ota
+#      fits the slot) are what actually prove the build fits both flash
+#      regions; nothing here bypasses them.
 #
-# The .ota and index.json are NOT committed back into the repo. They used to be,
-# and Z2M kept reading a stale index for minutes afterwards: raw.githubusercontent
-# .com is served through Fastly with Cache-Control: max-age=300. Release assets
-# plus the /releases/latest/download/ alias make a new image visible immediately.
-#
-# Z2M points at:
-#   https://github.com/<owner>/<repo>/releases/latest/download/index.json
+# Replaces the old build-ota.yml, which triggered off a Studio-built binary
+# being pushed into ota/ — that workflow is retired now that the binary is
+# built here instead.
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'ota/*.s37'
-      - 'ota/*.hex'
-      - 'ota/*.bin'
-      - '.github/workflows/build-ota.yml'
-      - '.github/scripts/create_ota.py'
-      - '.github/scripts/build_ota_index.py'
+    tags: ['v*.*.*']
 
 permissions:
   contents: write
@@ -31,16 +30,75 @@ env:
   MANUFACTURER_NAME: DIY-Immax
 
 jobs:
-  build-and-release:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+
+      - name: Sanity-check the tag was cut from main
+        run: |
+          TAG_SHA="${{ github.sha }}"
+          if ! git merge-base --is-ancestor "$TAG_SHA" HEAD; then
+            echo "!! tag ${{ github.ref_name }} (commit $TAG_SHA) is not an ancestor of main." >&2
+            echo "!! push release tags from the current tip of main." >&2
+            exit 1
+          fi
+
+      - name: Bump version fields to match the tag
+        run: python .github/scripts/bump_version.py --tag "${{ github.ref_name }}"
+
+      - name: Slot geometry check (before spending time on a build)
+        run: python .github/scripts/check_slot_geometry.py
+
+      - name: Commit the version bump and move the tag
+        id: bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Zigbee-Remote-_TYZB01_7qf81wty/app_config.h \
+                  Zigbee-Remote-_TYZB01_7qf81wty/config/ota-client-policy-config.h
+          if git diff --cached --quiet; then
+            echo "!! bump_version.py made no changes — did the tag match the already-committed version?" >&2
+            exit 1
+          fi
+          git commit -m "${{ github.ref_name }}: version bump [skip ci]"
+          git push origin HEAD:main
+          # Move the release tag to the bump commit, so the tag, the built
+          # binary, and the committed source all agree on the version. This
+          # force-updates the tag ref on purpose — same pattern release
+          # automation tools like release-please/semantic-release use for a
+          # tag that's meant to always point at its release commit.
+          git tag -f "${{ github.ref_name }}"
+          git push --force origin "refs/tags/${{ github.ref_name }}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache slc-cli / toolchain / gecko_sdk
+        uses: actions/cache@v4
+        with:
+          path: tools/.cache
+          key: slc-tools-${{ hashFiles('tools/slc-install.sh') }}
+
+      - name: Install slc-cli + toolchain + SDK
+        run: tools/slc-install.sh
+
+      - name: Build the app from source
+        run: tools/slc-build.sh Zigbee-Remote-_TYZB01_7qf81wty EFR32MG13P732F512GM48 build/app
+
+      - name: Stage the build output where create_ota.py expects it
+        run: |
+          mkdir -p ota
+          cp build/app/artifacts/*.s37 ota/ 2>/dev/null || true
+          cp build/app/artifacts/*.hex ota/ 2>/dev/null || true
+          ls -la ota/
 
       - name: Cache Simplicity Commander
         id: cache-commander
@@ -60,7 +118,7 @@ jobs:
       - name: Add Commander to PATH
         run: echo "${GITHUB_WORKSPACE}/commander" >> $GITHUB_PATH
 
-      - name: Build the .ota from the pushed firmware
+      - name: Build the .ota from the freshly-built firmware
         id: ota
         run: python .github/scripts/create_ota.py
 
@@ -98,6 +156,8 @@ jobs:
               "${{ steps.ota.outputs.ota_path }}" dist/index.json $HEX_ASSET \
               --title "$TAG" \
               --notes "Firmware ${TAG} for the TS1001_TYZB01_7qf81wty_Enhanced remote.
+
+          Built from source by GitHub Actions (tools/slc-install.sh + tools/slc-build.sh).
 
           Zigbee2MQTT picks this up automatically via:
           \`https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/index.json\`" \
@@ -150,16 +210,3 @@ jobs:
               sys.exit("published assets are inconsistent")
           print(f"verified {ota.name}: fileVersion=0x{fver:08X} size={total}")
           PY
-
-      - name: Commit removal of the raw firmware build
-        if: steps.ota.outputs.released == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A ota/
-          if git diff --cached --quiet; then
-            echo "Nothing to commit."
-          else
-            git commit -m "ota: publish ${{ steps.ota.outputs.tag }} as a release [skip ci]"
-            git push
-          fi
