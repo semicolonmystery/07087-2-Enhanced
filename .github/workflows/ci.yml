@@ -52,6 +52,21 @@ jobs:
       - name: Install slc-cli + toolchain + SDK
         run: tools/slc-install.sh
 
+      # TEMPORARY — the app didn't get zap-config.h generated from its .zap
+      # file (make failed with zap-config.h: No such file or directory).
+      # Find out how zap generation is supposed to be wired in here.
+      - name: Diagnose zap tooling
+        run: |
+          source tools/.cache/env.sh
+          echo "--- slt list --packages (zap?) ---"
+          slt list --packages 2>&1 | grep -i zap || echo "(no zap package listed)"
+          echo "--- anything zap-ish already on disk under ~/.silabs ---"
+          find "$HOME/.silabs" -iname "*zap*" 2>/dev/null | head -20 || true
+          echo "--- slc --help (top-level commands) ---"
+          slc --help 2>&1
+          echo "--- slt where zap (if it exists as a package) ---"
+          slt where zap 2>&1 || true
+
       - name: Build the app
         run: tools/slc-build.sh Zigbee-Remote-_TYZB01_7qf81wty EFR32MG13P732F512GM48 build/app
 
