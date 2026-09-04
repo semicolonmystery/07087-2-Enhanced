@@ -38,7 +38,8 @@ fi
 : "${TOOLCHAIN_DIR:?run tools/slc-install.sh first}"
 : "${SDK_DIR:?run tools/slc-install.sh first}"
 : "${ZAP_DIR:?run tools/slc-install.sh first}"
-export PATH="$SLC_CLI_DIR:$TOOLCHAIN_DIR/bin:$PATH"
+: "${COMMANDER_DIR:?run tools/slc-install.sh first}"
+export PATH="$SLC_CLI_DIR:$TOOLCHAIN_DIR/bin:$COMMANDER_DIR:$PATH"
 
 SLCP="$PROJECT_DIR/$(basename "$PROJECT_DIR").slcp"
 if [[ ! -f "$SLCP" ]]; then
@@ -106,6 +107,23 @@ make -C "$BUILD_SUBDIR" -f "$(basename "$MAKEFILE")" \
     ARM_GCC_DIR="$TOOLCHAIN_DIR" \
     POST_BUILD_EXE=true \
     -j"$(nproc 2>/dev/null || echo 2)"
+
+# The "makefile" output type links a .out but doesn't include the default
+# ELF->s37/hex/bin conversion Studio's own IDE build config runs as a matter
+# of course after linking. Reproduce it with Commander if nothing already
+# produced those formats (the bootloader's *custom* post_build combine step,
+# when it actually runs instead of the POST_BUILD_EXE=true no-op above,
+# would already have done this itself).
+if ! find "$BUILD_SUBDIR" -maxdepth 1 -iname "*.s37" -print -quit | grep -q .; then
+    OUT_FILE="$(find "$BUILD_SUBDIR" -iname "*.out" | head -1)"
+    if [[ -n "$OUT_FILE" ]]; then
+        BASE="$(basename "$OUT_FILE" .out)"
+        echo ">> converting $OUT_FILE -> $BASE.{s37,hex,bin} via Commander"
+        commander convert "$OUT_FILE" --output "$BUILD_SUBDIR/$BASE.s37"
+        commander convert "$OUT_FILE" --output "$BUILD_SUBDIR/$BASE.hex"
+        commander convert "$OUT_FILE" --output "$BUILD_SUBDIR/$BASE.bin"
+    fi
+fi
 
 # ---- collect artifacts ---------------------------------------------------
 ARTIFACT_DIR="$OUT_DIR/artifacts"
