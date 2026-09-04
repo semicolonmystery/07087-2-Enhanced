@@ -52,13 +52,6 @@ jobs:
       - name: Install slc-cli + toolchain + SDK
         run: tools/slc-install.sh
 
-      # TEMPORARY — remove once slc-build.sh's flags are confirmed working.
-      - name: Diagnose slc generate flags
-        run: |
-          source tools/.cache/env.sh
-          slc --version
-          slc generate --help
-
       - name: Build the app
         run: tools/slc-build.sh Zigbee-Remote-_TYZB01_7qf81wty EFR32MG13P732F512GM48 build/app
 

@@ -54,6 +54,7 @@ slc generate "$SLCP" \
     --with "$PART_ID" \
     -tlcn gcc \
     -d "$OUT_DIR" \
+    -o makefile \
     --copy-sources
 
 # The generated makefile's name isn't fixed across slc-cli versions (it has
