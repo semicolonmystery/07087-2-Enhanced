@@ -59,6 +59,21 @@ slc generate "$SLCP" \
     --copy-sources \
     --tool-path "$ZAP_DIR"
 
+# slc generate's Application Configurator writes a fresh, DEFAULT
+# <component>-config.h for every configurable component — it does not know
+# these files are already persisted, hand-tuned project state (per
+# CLAUDE.md: "config/*.h... persist normally and are picked up by the next
+# Studio build"). Studio's IDE build never regenerates a config/*.h that
+# already exists; slc-cli's headless generate has no equivalent, so restore
+# our tracked values over its defaults before compiling. Without this,
+# app.c's own #if guards (mirrored-constant cross-checks) catch the drift
+# and fail the build — which is what surfaced this in the first place.
+if [[ -d "$PROJECT_DIR/config" ]]; then
+    echo ">> restoring tracked config/*.h over slc's regenerated defaults"
+    mkdir -p "$OUT_DIR/config"
+    cp -f "$PROJECT_DIR"/config/*.h "$OUT_DIR/config/"
+fi
+
 # The generated makefile's name isn't fixed across slc-cli versions (it has
 # been seen both as <project>.Makefile and as a plain `makefile` alongside
 # per-toolchain subdirectories, matching what Studio's own IDE build produces
@@ -79,8 +94,17 @@ MAKEFILE="${MAKEFILES[0]}"
 BUILD_SUBDIR="$(dirname "$MAKEFILE")"
 
 echo ">> make -C $BUILD_SUBDIR -f $(basename "$MAKEFILE")"
+# POST_BUILD_EXE=true: a project with a `post_build:` profile in its .slcp
+# (the bootloader) generates a Makefile step that invokes Studio's own
+# post-build tool via $(POST_BUILD_EXE) — undefined here since that tool
+# isn't something slt distributes, and the Makefile treats it as a hard
+# error rather than skipping. `true` makes that step a no-op regardless of
+# what arguments it's called with; the actual combine-first-stage-and-main-
+# stage step this would have run is done explicitly in bootloader.yml
+# instead (see its "Combine first-stage + main-stage" step).
 make -C "$BUILD_SUBDIR" -f "$(basename "$MAKEFILE")" \
     ARM_GCC_DIR="$TOOLCHAIN_DIR" \
+    POST_BUILD_EXE=true \
     -j"$(nproc 2>/dev/null || echo 2)"
 
 # ---- collect artifacts ---------------------------------------------------

@@ -52,14 +52,6 @@ jobs:
       - name: Install slc-cli + toolchain + SDK
         run: tools/slc-install.sh
 
-      # TEMPORARY — confirming --tool-path "$ZAP_DIR" actually gets zap
-      # generation running (see the ZAP_DIR plumbing in slc-install.sh).
-      - name: Diagnose zap tooling
-        run: |
-          source tools/.cache/env.sh
-          echo "--- ZAP_DIR=$ZAP_DIR ---"
-          find "$ZAP_DIR" -maxdepth 2 2>&1
-
       - name: Build the app
         run: tools/slc-build.sh Zigbee-Remote-_TYZB01_7qf81wty EFR32MG13P732F512GM48 build/app
 
