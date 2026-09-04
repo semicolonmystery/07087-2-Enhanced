@@ -34,9 +34,10 @@ if [[ -f "$ENV_FILE" ]]; then
     # shellcheck source=/dev/null
     source "$ENV_FILE"
 fi
-: "${SLC_CLI_DIR:?run tools/slc-install.sh first (or export SLC_CLI_DIR/TOOLCHAIN_DIR/SDK_DIR)}"
+: "${SLC_CLI_DIR:?run tools/slc-install.sh first (or export SLC_CLI_DIR/TOOLCHAIN_DIR/SDK_DIR/ZAP_DIR)}"
 : "${TOOLCHAIN_DIR:?run tools/slc-install.sh first}"
 : "${SDK_DIR:?run tools/slc-install.sh first}"
+: "${ZAP_DIR:?run tools/slc-install.sh first}"
 export PATH="$SLC_CLI_DIR:$TOOLCHAIN_DIR/bin:$PATH"
 
 SLCP="$PROJECT_DIR/$(basename "$PROJECT_DIR").slcp"
@@ -55,7 +56,8 @@ slc generate "$SLCP" \
     -tlcn gcc \
     -d "$OUT_DIR" \
     -o makefile \
-    --copy-sources
+    --copy-sources \
+    --tool-path "$ZAP_DIR"
 
 # The generated makefile's name isn't fixed across slc-cli versions (it has
 # been seen both as <project>.Makefile and as a plain `makefile` alongside

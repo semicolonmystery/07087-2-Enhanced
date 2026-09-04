@@ -63,13 +63,17 @@ export PATH="$BIN_DIR:$PATH"
 # ---- slc-cli + ARM toolchain, via slt -----------------------------------
 # slt manages its own package cache (typically under the user's home dir);
 # we never guess its layout — always resolve real paths with `slt where`.
-echo ">> installing slc-cli + gcc-arm-none-eabi via slt (skips what's cached)"
-slt install slc-cli gcc-arm-none-eabi --non-interactive
+echo ">> installing slc-cli + gcc-arm-none-eabi + zap via slt (skips what's cached)"
+slt install slc-cli gcc-arm-none-eabi zap --non-interactive
 
 SLC_CLI_DIR="$(slt where slc-cli)"
 TOOLCHAIN_DIR="$(slt where gcc-arm-none-eabi)"
+# zap (ZCL Advanced Platform) generates zap-config.h etc. from config/zcl/*.zap
+# — it's a separate tool slc-cli only invokes if it's told where to find it
+# (slc generate --tool-path); it isn't bundled with slc-cli itself.
+ZAP_DIR="$(slt where zap)"
 
-if [[ -z "$SLC_CLI_DIR" || -z "$TOOLCHAIN_DIR" ]]; then
+if [[ -z "$SLC_CLI_DIR" || -z "$TOOLCHAIN_DIR" || -z "$ZAP_DIR" ]]; then
     echo "!! 'slt where' returned an empty path — slt install likely failed silently." >&2
     exit 1
 fi
@@ -103,6 +107,7 @@ cat > "$ENV_FILE" <<EOF
 export SLC_CLI_DIR="$(cd "$SLC_CLI_DIR" && pwd)"
 export TOOLCHAIN_DIR="$(cd "$TOOLCHAIN_DIR" && pwd)"
 export SDK_DIR="$(cd "$SDK_DIR" && pwd)"
+export ZAP_DIR="$(cd "$ZAP_DIR" && pwd)"
 # The slc launcher resolves its bundled Java via dirname "\$0" — put the
 # directory on PATH, never symlink the slc binary itself elsewhere.
 export PATH="\$SLC_CLI_DIR:\$TOOLCHAIN_DIR/bin:$(cd "$BIN_DIR" && pwd):\$PATH"
@@ -112,4 +117,5 @@ echo ">> wrote $ENV_FILE"
 echo ">> SLC_CLI_DIR=$SLC_CLI_DIR"
 echo ">> TOOLCHAIN_DIR=$TOOLCHAIN_DIR"
 echo ">> SDK_DIR=$SDK_DIR"
+echo ">> ZAP_DIR=$ZAP_DIR"
 echo ">> done. Run: source $ENV_FILE"
