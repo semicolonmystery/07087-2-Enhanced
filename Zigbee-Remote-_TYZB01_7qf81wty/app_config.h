@@ -222,8 +222,8 @@
 // ---- Human-readable version. Bump all four together for a release. --------
 #define FW_VERSION_MAJOR            1
 #define FW_VERSION_MINOR            0
-#define FW_VERSION_PATCH            16
-#define FW_VERSION_STRING           "1.0.16"   // -> Basic SW Build ID (0x4000)
+#define FW_VERSION_PATCH            17
+#define FW_VERSION_STRING           "1.0.17"   // -> Basic SW Build ID (0x4000)
 #define FW_DATE_CODE                "20260904" // -> Basic DateCode (0x0006), YYYYMMDD
 
 // Flat build counter. MUST increase on EVERY released image — it is the only
@@ -231,7 +231,7 @@
 // the file version is strictly greater than the running one. It is deliberately
 // NOT derived from major/minor/patch: a single byte cannot encode all three
 // without collisions (1.0.10 and 1.1.0 would tie).
-#define FW_BUILD                    16
+#define FW_BUILD                    17
 
 // EmberZNet version this image is built against (GSDK 4.4.6 = EmberZNet 7.4.x).
 #define FW_STACK_REL                7
@@ -252,7 +252,7 @@
 // Kept as a plain hex literal on purpose: .github/scripts/create_ota.py parses
 // it with the regex `FW_OTA_FILE_VERSION\s+0x([0-9a-fA-F]+)` and would fail on
 // an expression. The #if below is what keeps the literal honest.
-#define FW_OTA_FILE_VERSION         0x01100704UL
+#define FW_OTA_FILE_VERSION         0x01110704UL
 
 #if FW_OTA_FILE_VERSION != (((FW_VERSION_MAJOR) << 24) | ((FW_BUILD) << 16) \
                             | ((FW_STACK_REL) << 8) | (FW_STACK_BUILD))
