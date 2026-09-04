@@ -21,6 +21,11 @@ name: Release (build from source + publish)
 on:
   push:
     tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to release (e.g. v1.0.16) — must already exist as a git tag'
+        required: true
 
 permissions:
   contents: write
@@ -38,23 +43,36 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
+      - name: Resolve the release tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "!! '$TAG' is not a vMAJOR.MINOR.PATCH tag" >&2
+            exit 1
+          fi
+          git fetch --tags --force
+          TAG_SHA="$(git rev-parse "refs/tags/$TAG")"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
+
       - name: Sanity-check the tag was cut from main
         run: |
-          TAG_SHA="${{ github.sha }}"
-          if ! git merge-base --is-ancestor "$TAG_SHA" HEAD; then
-            echo "!! tag ${{ github.ref_name }} (commit $TAG_SHA) is not an ancestor of main." >&2
+          if ! git merge-base --is-ancestor "${{ steps.tag.outputs.sha }}" HEAD; then
+            echo "!! tag ${{ steps.tag.outputs.tag }} (commit ${{ steps.tag.outputs.sha }}) is not an ancestor of main." >&2
             echo "!! push release tags from the current tip of main." >&2
             exit 1
           fi
 
       - name: Bump version fields to match the tag
-        run: python .github/scripts/bump_version.py --tag "${{ github.ref_name }}"
+        run: python .github/scripts/bump_version.py --tag "${{ steps.tag.outputs.tag }}"
 
       - name: Slot geometry check (before spending time on a build)
         run: python .github/scripts/check_slot_geometry.py
@@ -70,15 +88,15 @@ jobs:
             echo "!! bump_version.py made no changes — did the tag match the already-committed version?" >&2
             exit 1
           fi
-          git commit -m "${{ github.ref_name }}: version bump [skip ci]"
+          git commit -m "${{ steps.tag.outputs.tag }}: version bump [skip ci]"
           git push origin HEAD:main
           # Move the release tag to the bump commit, so the tag, the built
           # binary, and the committed source all agree on the version. This
           # force-updates the tag ref on purpose — same pattern release
           # automation tools like release-please/semantic-release use for a
           # tag that's meant to always point at its release commit.
-          git tag -f "${{ github.ref_name }}"
-          git push --force origin "refs/tags/${{ github.ref_name }}"
+          git tag -f "${{ steps.tag.outputs.tag }}"
+          git push --force origin "refs/tags/${{ steps.tag.outputs.tag }}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Cache slc-cli / toolchain / gecko_sdk
