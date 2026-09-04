@@ -119,9 +119,9 @@ if ! find "$BUILD_SUBDIR" -maxdepth 1 -iname "*.s37" -print -quit | grep -q .; t
     if [[ -n "$OUT_FILE" ]]; then
         BASE="$(basename "$OUT_FILE" .out)"
         echo ">> converting $OUT_FILE -> $BASE.{s37,hex,bin} via Commander"
-        commander convert "$OUT_FILE" --output "$BUILD_SUBDIR/$BASE.s37"
-        commander convert "$OUT_FILE" --output "$BUILD_SUBDIR/$BASE.hex"
-        commander convert "$OUT_FILE" --output "$BUILD_SUBDIR/$BASE.bin"
+        commander convert "$OUT_FILE" -o "$BUILD_SUBDIR/$BASE.s37"
+        commander convert "$OUT_FILE" -o "$BUILD_SUBDIR/$BASE.hex"
+        commander convert "$OUT_FILE" -o "$BUILD_SUBDIR/$BASE.bin"
     fi
 fi
 
